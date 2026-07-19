@@ -20,3 +20,87 @@ jobs:
           node-version: 20
           cache: npm
       - name: Apply requested family features
+        shell: python
+        run: |
+          from pathlib import Path
+
+          app_path = Path('src/family-app.tsx')
+          css_path = Path('src/globals.css')
+          text = app_path.read_text()
+
+          replacements = [
+            ('<h2>최근 가족 순간</h2>', '<h2>추억의 사진첩</h2>'),
+            ('<h1>함께 해내는 주말</h1><p>제안하고, 약속하고, 서로 확인하면 나무가 자라요.</p>', '<h1>함께 해내는 행복 - 바람을 만들어요.</h1><p>제안하고, 약속하고, 서로 확인하면 나무가 자라요.</p>'),
+            ('<article className="card goal-card"><div><span>우리 가족의 100점 나무</span><h2>{points >= 100 ? "🍕 피자 파티가 열렸어요!" : `${points}점 모았어요`}</h2><div className="progress large"><span style={{ width: `${Math.min(100, points)}%` }} /></div></div><div className="big-tree">{points < 30 ? "🌱" : points < 70 ? "🌿" : "🌳"}</div></article>', '<article className="card goal-card"><div><span>우리 가족의 성장 나무</span><h2>{points >= 100 ? `목표 달성 · ${points} / 100점` : `${points} / 100점`}</h2><p>{growthCaption(points)}</p><div className="progress large"><span style={{ width: `${Math.min(100, points)}%` }} /></div></div><FamilyGrove points={points} /></article>'),
+            ('<aside className="recommend card"><p className="eyebrow">RECOMMENDED</p><h3>이런 퀘스트 어때요?</h3>{recommended.map(([title, emoji, points]) => <button key={title} onClick={() => setData((old) => ({ ...old, quests: [{ id: uid("q"), title, emoji, points, creator: current.name, status: "open", createdAt: new Date().toISOString() }, ...old.quests] }))}><span>{emoji}</span><div><b>{title}</b><small>+{points}점</small></div><i>＋</i></button>)}</aside>', '<aside className="recommend card"><p className="eyebrow">RECOMMENDED</p><h3>이런 바람 어때요?</h3>{recommended.map(([title, emoji, points]) => { const suggested = { id: `recommended-${title}`, title, emoji, points, creator: current.name, status: "open" as QuestStatus, createdAt: new Date().toISOString() }; return <div className="recommend-row" key={title}><button className="recommend-detail" onClick={() => setDetailQuest(suggested)}><span>{emoji}</span><div><b>{title}</b><small>+{points}점 · 자세히 보기</small></div></button><button className="recommend-add" aria-label={`${title} 바로 추가`} onClick={() => setData((old) => ({ ...old, quests: [{ ...suggested, id: uid("q"), createdAt: new Date().toISOString() }, ...old.quests] }))}>＋</button></div>; })}</aside>'),
+            ('<div className="lane-tabs">{lanes.map(([id, title]) => <button key={id} className={lane === id ? "active" : ""} onClick={() => setLane(id)}>{title}<em>{data.quests.filter((q) => q.status === id).length}</em></button>)}</div>', '<div className="lane-tabs-row"><div className="lane-tabs">{lanes.map(([id, title]) => <button key={id} className={lane === id ? "active" : ""} onClick={() => setLane(id)}>{title}<em>{data.quests.filter((q) => q.status === id).length}</em></button>)}</div><button className="primary coral-bg compact wish-add wish-add-secondary" onClick={() => setModal("quest")}><span>＋</span> 바람 추가</button></div>'),
+          ]
+
+          for old, new in replacements:
+            if old not in text:
+              raise SystemExit(f'Missing expected source snippet: {old[:80]}')
+            text = text.replace(old, new, 1)
+
+          start = text.index('function FamilyGrove({ points }: { points: number }) {')
+          end = text.index('\nfunction Quests(', start)
+          grove = '''function FamilyGrove({ points }: { points: number }) {
+            const treeCount = points >= 200 ? 3 : points >= 150 ? 2 : points >= 100 ? 1 : 0;
+            const preGoal = Math.max(0, Math.min(100, points));
+            return <div className={`family-grove expanded trees-${treeCount}`} aria-label={`가족 나무 성장도 ${points}점`}>
+              {treeCount === 0
+                ? <GrowingPlant growth={preGoal / 100} side="center" />
+                : Array.from({ length: treeCount }, (_, index) => <span className="grown-tree" key={index} aria-hidden="true">🌳</span>)}
+              <div className="grove-ground" />
+            </div>;
+          }
+
+          function GrowingPlant({ growth, side }: { growth: number; side: "left" | "center" | "right" }) {
+            const symbol = growth < 0.34 ? "🌱" : growth < 0.75 ? "🌿" : "🌳";
+            const scale = 0.78 + growth * 0.58;
+            return <span className={`growing-plant ${side}`} style={{ transform: `scale(${scale}) translateY(${growth > 0.74 ? "-2px" : "0"})` }} aria-hidden="true">{symbol}</span>;
+          }
+
+          function growthCaption(points: number) {
+            if (points <= 0) return "작은 새싹에서 시작해요";
+            if (points < 100) return `첫 나무까지 ${100 - points}점 남았어요`;
+            if (points < 150) return `첫 번째 나무 완성 · 두 번째 나무까지 ${150 - points}점`;
+            if (points < 200) return `두 번째 나무 완성 · 세 번째 나무까지 ${200 - points}점`;
+            return "세 그루의 가족 나무가 모두 완성됐어요!";
+          }
+          '''
+          text = text[:start] + grove + text[end:]
+          app_path.write_text(text)
+
+          css = css_path.read_text()
+          marker = '/* memories-wishes-v2 */'
+          if marker not in css:
+            css += '''\n\n/* memories-wishes-v2 */
+          .lane-tabs-row { display:flex; align-items:center; gap:12px; margin:20px 0; }
+          .lane-tabs-row .lane-tabs { flex:1; margin:0; }
+          .wish-add-secondary { white-space:nowrap; }
+          .recommend-row { display:grid; grid-template-columns:1fr 44px; gap:8px; align-items:stretch; margin-top:8px; }
+          .recommend-row .recommend-detail, .recommend-row .recommend-add { margin:0; }
+          .recommend-detail { width:100%; display:flex; align-items:center; gap:10px; text-align:left; }
+          .recommend-add { display:grid; place-items:center; border-radius:14px; background:var(--coral); color:white; font-size:22px; font-weight:900; }
+          .family-grove.expanded { min-height:118px; display:flex; justify-content:center; align-items:flex-end; gap:4px; overflow:visible; }
+          .family-grove.expanded .grown-tree { display:inline-block; font-size:72px; line-height:1; transform-origin:bottom center; }
+          .family-grove.expanded.trees-2 .grown-tree:first-child { transform:scale(.94) translateX(8px); }
+          .family-grove.expanded.trees-2 .grown-tree:last-child { transform:scale(1.06) translateX(-8px); }
+          .family-grove.expanded.trees-3 .grown-tree:nth-child(1) { transform:scale(.84) translateX(18px); }
+          .family-grove.expanded.trees-3 .grown-tree:nth-child(2) { transform:scale(1.08); z-index:2; }
+          .family-grove.expanded.trees-3 .grown-tree:nth-child(3) { transform:scale(.9) translateX(-18px); }
+          @media (max-width: 760px) { .lane-tabs-row { align-items:stretch; flex-direction:column; } .wish-add-secondary { width:100%; } .family-grove.expanded .grown-tree { font-size:58px; } }
+          '''
+            css_path.write_text(css)
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate production build
+        run: npm run build
+      - name: Commit and push deployed features
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/family-app.tsx src/globals.css
+          git diff --cached --quiet && exit 0
+          git commit -m "Deploy memories album and wish features"
+          git push origin main
