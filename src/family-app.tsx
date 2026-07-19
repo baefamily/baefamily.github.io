@@ -391,9 +391,11 @@ function AuthSplash() {
 }
 
 function FamilyLogin({ onSuccess }: { onSuccess: (memberName: string) => Promise<void> }) {
+  const [resetMode, setResetMode] = useState(false);
   const [familyCode, setFamilyCode] = useState("");
   const [memberName, setMemberName] = useState("Jangwoo");
   const [pin, setPin] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const member = members.find((item) => item.name === memberName) ?? members[0];
@@ -403,10 +405,12 @@ function FamilyLogin({ onSuccess }: { onSuccess: (memberName: string) => Promise
     setError("");
     setBusy(true);
     try {
-      const response = await fetch("/api/auth/join", {
+      const response = await fetch(resetMode ? "/api/auth/reset-pin" : "/api/auth/join", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ familyCode, memberName, pin }),
+        body: JSON.stringify(resetMode
+          ? { familyCode, recoveryCode, memberName, newPin: pin }
+          : { familyCode, memberName, pin }),
       });
       const result = await response.json() as { memberName?: string; error?: string };
       if (!response.ok || !result.memberName) throw new Error(result.error ?? "로그인하지 못했습니다.");
@@ -423,15 +427,17 @@ function FamilyLogin({ onSuccess }: { onSuccess: (memberName: string) => Promise
       <div className="auth-art"><img src="/favicon.svg" alt="" /><p>작은 바람이 모여<br /><b>우리 가족의 이야기가 돼요.</b></p></div>
       <form onSubmit={submit}>
         <p className="eyebrow">PRIVATE FAMILY SPACE</p>
-        <h1>우리 가족 공간에<br />들어가기</h1>
-        <p className="auth-guide">처음 한 번만 가족 코드와 개인 PIN을 입력하면 이 기기에서 1년간 바로 열립니다.</p>
+        <h1>{resetMode ? <>새 PIN<br />설정하기</> : <>우리 가족 공간에<br />들어가기</>}</h1>
+        <p className="auth-guide">{resetMode ? "가족 관리자에게 받은 복구 코드를 입력하고 새 PIN을 정해주세요." : "처음 한 번만 가족 코드와 개인 PIN을 입력하면 이 기기에서 1년간 바로 열립니다."}</p>
         <label className="field">가족 코드<input value={familyCode} onChange={(event) => setFamilyCode(event.target.value.toUpperCase())} autoCapitalize="characters" autoCorrect="off" placeholder="가족에게 받은 코드" /></label>
         <label className="field">나는 누구인가요?<select value={memberName} onChange={(event) => setMemberName(event.target.value)}>{members.map((item) => <option key={item.id}>{item.name}</option>)}</select></label>
         <div className="login-member"><span style={{ background: member.color }}>{member.emoji}</span><div><b>{member.name}</b><small>{member.role}</small></div></div>
-        <label className="field">나의 4자리 PIN<input type="password" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} placeholder="숫자 4자리" /></label>
-        <small className="pin-help">첫 로그인이라면 입력한 PIN이 내 개인 PIN으로 등록돼요.</small>
+        {resetMode && <label className="field">관리자 복구 코드<input type="password" value={recoveryCode} onChange={(event) => setRecoveryCode(event.target.value)} autoComplete="off" placeholder="가족 관리자에게 문의하세요" /></label>}
+        <label className="field">{resetMode ? "새로운 4자리 PIN" : "나의 4자리 PIN"}<input type="password" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} placeholder="숫자 4자리" /></label>
+        <small className="pin-help">{resetMode ? "새 PIN으로 바로 로그인됩니다." : "첫 로그인이라면 입력한 PIN이 내 개인 PIN으로 등록돼요."}</small>
         {error && <p className="auth-error">{error}</p>}
-        <button className="primary coral-bg full" disabled={busy || !familyCode || pin.length !== 4}>{busy ? "확인하는 중…" : "우리 가족 공간 열기"}</button>
+        <button className="primary coral-bg full" disabled={busy || !familyCode || pin.length !== 4 || (resetMode && !recoveryCode)}>{busy ? "확인하는 중…" : resetMode ? "새 PIN으로 들어가기" : "우리 가족 공간 열기"}</button>
+        <button type="button" className="pin-reset-link" onClick={() => { setResetMode((old) => !old); setPin(""); setRecoveryCode(""); setError(""); }}>{resetMode ? "로그인으로 돌아가기" : "PIN을 잊으셨나요?"}</button>
       </form>
     </section>
   </div>;
