@@ -1,0 +1,22 @@
+name: Deploy memories album and wish features
+
+on:
+  push:
+    paths:
+      - .github/workflows/deploy-memories-wishes.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build-deploy:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply requested family features
