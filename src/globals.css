@@ -405,3 +405,21 @@ h2 { letter-spacing: -.025em; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }
+
+
+/* memories-wishes-v2 */
+.lane-tabs-row { display:flex; align-items:center; gap:12px; margin:20px 0; }
+.lane-tabs-row .lane-tabs { flex:1; margin:0; }
+.wish-add-secondary { white-space:nowrap; }
+.recommend-row { display:grid; grid-template-columns:1fr 44px; gap:8px; align-items:stretch; margin-top:8px; }
+.recommend-row .recommend-detail, .recommend-row .recommend-add { margin:0; }
+.recommend-detail { width:100%; display:flex; align-items:center; gap:10px; text-align:left; }
+.recommend-add { display:grid; place-items:center; border-radius:14px; background:var(--coral); color:white; font-size:22px; font-weight:900; }
+.family-grove.expanded { min-height:118px; display:flex; justify-content:center; align-items:flex-end; gap:4px; overflow:visible; }
+.family-grove.expanded .grown-tree { display:inline-block; font-size:72px; line-height:1; transform-origin:bottom center; }
+.family-grove.expanded.trees-2 .grown-tree:first-child { transform:scale(.94) translateX(8px); }
+.family-grove.expanded.trees-2 .grown-tree:last-child { transform:scale(1.06) translateX(-8px); }
+.family-grove.expanded.trees-3 .grown-tree:nth-child(1) { transform:scale(.84) translateX(18px); }
+.family-grove.expanded.trees-3 .grown-tree:nth-child(2) { transform:scale(1.08); z-index:2; }
+.family-grove.expanded.trees-3 .grown-tree:nth-child(3) { transform:scale(.9) translateX(-18px); }
+@media (max-width: 760px) { .lane-tabs-row { align-items:stretch; flex-direction:column; } .wish-add-secondary { width:100%; } .family-grove.expanded .grown-tree { font-size:58px; } }

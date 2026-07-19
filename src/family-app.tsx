@@ -531,7 +531,7 @@ function Home({ data, current, presence, setModal, setTab }: { data: FamilyState
         : <p className="week-agenda-empty">이번 주에는 등록된 일정이 없어요. 가족과 하고 싶은 일을 달력에 더해보세요.</p>}
     </article>
 
-    <div className="section-heading"><div><p className="eyebrow">FAMILY MOMENTS</p><h2>최근 가족 순간</h2></div><button onClick={() => setModal("archive")}>모두 보기</button></div>
+    <div className="section-heading"><div><p className="eyebrow">FAMILY MOMENTS</p><h2>추억의 사진첩</h2></div><button onClick={() => setModal("archive")}>모두 보기</button></div>
     <div className="moment-grid">
       <article className="card moment-placeholder">
         {recent ? <><img src={recent.url} alt={recent.caption || "가족 미션 사진"} /><div className="photo-overlay"><b>{recent.caption || "오늘의 웃긴 표정"}</b><small>{recent.author} · 좋아요 {recent.likes.length}</small></div></> : <><span>📸</span><h3>첫 가족 순간을 남겨보세요</h3><p>사진을 찍거나 보관함에서 골라 올릴 수 있어요.</p><button onClick={() => setModal("photo")}>사진 올리기</button></>}
@@ -555,34 +555,28 @@ function relativeSeen(value: string) {
 }
 
 function FamilyGrove({ points }: { points: number }) {
-  const safePoints = Math.max(0, Math.min(100, points));
-  const centerGrowth = Math.min(1, safePoints / 34);
-  const sideGrowth = Math.max(0, Math.min(1, (safePoints - 34) / 66));
-
-  return <div className="family-grove" aria-label={`가족 나무 성장도 ${safePoints}점`}>
-    <GrowingPlant growth={sideGrowth} side="left" />
-    <GrowingPlant growth={centerGrowth} side="center" />
-    <GrowingPlant growth={sideGrowth} side="right" />
+  const treeCount = points >= 200 ? 3 : points >= 150 ? 2 : points >= 100 ? 1 : 0;
+  const preGoal = Math.max(0, Math.min(100, points));
+  return <div className={`family-grove expanded trees-${treeCount}`} aria-label={`가족 나무 성장도 ${points}점`}>
+    {treeCount === 0
+      ? <GrowingPlant growth={preGoal / 100} side="center" />
+      : Array.from({ length: treeCount }, (_, index) => <span className="grown-tree" key={index} aria-hidden="true">🌳</span>)}
     <div className="grove-ground" />
   </div>;
 }
 
 function GrowingPlant({ growth, side }: { growth: number; side: "left" | "center" | "right" }) {
   const symbol = growth < 0.34 ? "🌱" : growth < 0.75 ? "🌿" : "🌳";
-  const scale = side === "center" ? 0.72 + growth * 0.5 : 0.62 + growth * 0.42;
-
-  return <span
-    className={`growing-plant ${side}`}
-    style={{ transform: `scale(${scale}) translateY(${growth > 0.74 ? "-2px" : "0"})` }}
-    aria-hidden="true"
-  >{symbol}</span>;
+  const scale = 0.78 + growth * 0.58;
+  return <span className={`growing-plant ${side}`} style={{ transform: `scale(${scale}) translateY(${growth > 0.74 ? "-2px" : "0"})` }} aria-hidden="true">{symbol}</span>;
 }
 
 function growthCaption(points: number) {
-  if (points <= 0) return "새싹 세 개에서 시작해요";
-  if (points < 34) return "가운데 나무가 자라는 중";
-  if (points < 100) return "양쪽 나무도 함께 자라는 중";
-  return "세 나무가 모두 무성해졌어요!";
+  if (points <= 0) return "작은 새싹에서 시작해요";
+  if (points < 100) return `첫 나무까지 ${100 - points}점 남았어요`;
+  if (points < 150) return `첫 번째 나무 완성 · 두 번째 나무까지 ${150 - points}점`;
+  if (points < 200) return `두 번째 나무 완성 · 세 번째 나무까지 ${200 - points}점`;
+  return "세 그루의 가족 나무가 모두 완성됐어요!";
 }
 
 function Quests({ data, setData, current, points, updateQuest, setModal }: { data: FamilyState; setData: (v: FamilyState | ((o: FamilyState) => FamilyState)) => void; current: Member; points: number; updateQuest: (id: string, patch: Partial<Quest>) => void; setModal: (v: "quest") => void }) {
@@ -603,10 +597,10 @@ function Quests({ data, setData, current, points, updateQuest, setModal }: { dat
     else if (q.status === "review" && q.creator === current.name) updateQuest(q.id, { status: "done", completedAt: new Date().toISOString() });
   };
   return <section className="page">
-    <div className="page-title"><div><p className="eyebrow">WEEKEND QUEST</p><h1>함께 해내는 주말</h1><p>제안하고, 약속하고, 서로 확인하면 나무가 자라요.</p></div><button className="primary coral-bg compact wish-add" onClick={() => setModal("quest")}><span>＋</span> 바람 추가</button></div>
+    <div className="page-title"><div><p className="eyebrow">WEEKEND QUEST</p><h1>함께 해내는 행복 - 바람을 만들어요.</h1><p>제안하고, 약속하고, 서로 확인하면 나무가 자라요.</p></div><button className="primary coral-bg compact wish-add" onClick={() => setModal("quest")}><span>＋</span> 바람 추가</button></div>
     <div className="quest-layout">
       <div>
-        <article className="card goal-card"><div><span>우리 가족의 100점 나무</span><h2>{points >= 100 ? "🍕 피자 파티가 열렸어요!" : `${points}점 모았어요`}</h2><div className="progress large"><span style={{ width: `${Math.min(100, points)}%` }} /></div></div><div className="big-tree">{points < 30 ? "🌱" : points < 70 ? "🌿" : "🌳"}</div></article>
+        <article className="card goal-card"><div><span>우리 가족의 성장 나무</span><h2>{points >= 100 ? `목표 달성 · ${points} / 100점` : `${points} / 100점`}</h2><p>{growthCaption(points)}</p><div className="progress large"><span style={{ width: `${Math.min(100, points)}%` }} /></div></div><FamilyGrove points={points} /></article>
         <article className={`wish-sky ${sky}`}>
           <div className="sky-title"><div><h2>{sky === "rainy" ? "🌧️ 구름을 함께 걷어주세요" : sky === "sunny" ? "☀️ 맑은 가족 하늘이에요" : "🌤️ 가족 위에 떠 있는 바람"}</h2><p>구름을 눌러 내용을 확인하고 내가 맡을 수 있어요.</p></div><span>{openCount}개의 바람</span></div>
           <div className="cloud-field">
@@ -635,9 +629,9 @@ function Quests({ data, setData, current, points, updateQuest, setModal }: { dat
           })}</div>
         </article>
       </div>
-      <aside className="recommend card"><p className="eyebrow">RECOMMENDED</p><h3>이런 퀘스트 어때요?</h3>{recommended.map(([title, emoji, points]) => <button key={title} onClick={() => setData((old) => ({ ...old, quests: [{ id: uid("q"), title, emoji, points, creator: current.name, status: "open", createdAt: new Date().toISOString() }, ...old.quests] }))}><span>{emoji}</span><div><b>{title}</b><small>+{points}점</small></div><i>＋</i></button>)}</aside>
+      <aside className="recommend card"><p className="eyebrow">RECOMMENDED</p><h3>이런 바람 어때요?</h3>{recommended.map(([title, emoji, points]) => { const suggested = { id: `recommended-${title}`, title, emoji, points, creator: current.name, status: "open" as QuestStatus, createdAt: new Date().toISOString() }; return <div className="recommend-row" key={title}><button className="recommend-detail" onClick={() => setDetailQuest(suggested)}><span>{emoji}</span><div><b>{title}</b><small>+{points}점 · 자세히 보기</small></div></button><button className="recommend-add" aria-label={`${title} 바로 추가`} onClick={() => setData((old) => ({ ...old, quests: [{ ...suggested, id: uid("q"), createdAt: new Date().toISOString() }, ...old.quests] }))}>＋</button></div>; })}</aside>
     </div>
-    <div className="lane-tabs">{lanes.map(([id, title]) => <button key={id} className={lane === id ? "active" : ""} onClick={() => setLane(id)}>{title}<em>{data.quests.filter((q) => q.status === id).length}</em></button>)}</div>
+    <div className="lane-tabs-row"><div className="lane-tabs">{lanes.map(([id, title]) => <button key={id} className={lane === id ? "active" : ""} onClick={() => setLane(id)}>{title}<em>{data.quests.filter((q) => q.status === id).length}</em></button>)}</div><button className="primary coral-bg compact wish-add wish-add-secondary" onClick={() => setModal("quest")}><span>＋</span> 바람 추가</button></div>
     <div className="quest-list">{visible.length ? visible.map((q) => <article className="quest-item card" key={q.id}><span className="quest-emoji">{q.emoji}</span><div><h3>{q.title}</h3><p className="quest-route"><span>{q.creator}</span><i>→</i><span>{q.target ?? "가족 모두"}</span></p></div><b>+{q.points}</b>{q.status !== "done" && q.status !== "talk" ? <button disabled={q.status === "open" && Boolean(q.target && q.target !== current.name)} onClick={() => act(q)}>{q.status === "open" ? (q.target && q.target !== current.name ? `${q.target} 전용` : "내가 할게요") : q.status === "doing" ? "완료했어요" : q.creator === current.name ? "확인하기" : "확인 기다리는 중"}</button> : null}</article>) : <div className="empty">지금 이곳에는 퀘스트가 없어요.</div>}</div>
     {detailQuest && <QuestDetailModal
       quest={detailQuest}
