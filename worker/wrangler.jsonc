@@ -3,6 +3,11 @@
   "name": "baefamily-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "VAPID_PUBLIC_KEY": "BF-rM_WihSP_CuX7Gl_3ewirAOHYh34hNIRUyIxlGoqR3E21TnWFIsDmdqkTRmhlA5-yNm19me-2wJ7UOeaWK9M",
+    "VAPID_SUBJECT": "mailto:baefamily@users.noreply.github.com"
+  },
   "d1_databases": [
     {
       "binding": "DB",
