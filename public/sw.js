@@ -11,8 +11,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "Our Family";
   const options = {
     body: payload.body || "새로운 가족 소식이 도착했어요.",
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    icon: "/app-icon.svg",
+    badge: "/app-icon.svg",
     tag: payload.tag || "our-family-update",
     renotify: true,
     data: { url: payload.url || "/" },
