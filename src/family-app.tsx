@@ -48,6 +48,7 @@ type NotificationState = {
   chatUnread: number;
   questUnread: number;
 };
+type PresenceItem = { memberName: string; lastSeen: string };
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
@@ -146,6 +147,7 @@ export function FamilyApp() {
   });
   const [notificationBusy, setNotificationBusy] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
+  const [presence, setPresence] = useState<PresenceItem[]>([]);
   const [eventDate, setEventDate] = useState(isoDay(today));
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -229,6 +231,28 @@ export function FamilyApp() {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
   }, [data, loaded, authMember]);
+
+  useEffect(() => {
+    if (!authMember) { setPresence([]); return; }
+    let active = true;
+    const ping = async () => {
+      try {
+        const response = await fetch("/api/presence", { method: "POST" });
+        if (!response.ok) return;
+        const result = await response.json() as { members: PresenceItem[] };
+        if (active) setPresence(result.members);
+      } catch { /* 다음 주기에 다시 시도합니다. */ }
+    };
+    ping();
+    const timer = window.setInterval(ping, 30_000);
+    const onVisible = () => { if (document.visibilityState === "visible") ping(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [authMember]);
 
   if (authChecking) return <AuthSplash />;
   if (!authMember) {
@@ -361,7 +385,7 @@ export function FamilyApp() {
           <button className="brand" onClick={() => setTab("home")}><img src="/icon-192.png" alt="" /><strong>OUR FAMILY <i>- C.I.N.D.Y</i></strong></button>
           <span className={`sync-dot ${sync}`}>{sync === "saved" ? "저장됨" : sync === "offline" ? "오프라인" : "저장 중"}</span>
         </header>
-        {tab === "home" && <Home data={data} current={current} setModal={setModal} setTab={setTab} />}
+        {tab === "home" && <Home data={data} current={current} presence={presence} setModal={setModal} setTab={setTab} />}
         {tab === "quests" && <Quests data={data} setData={setData} current={current} points={verifiedPoints} updateQuest={updateQuest} setModal={setModal} />}
         {tab === "chat" && <Chat data={data} setData={setData} current={current} />}
         {tab === "stats" && <Stats data={data} current={current} />}
@@ -447,7 +471,7 @@ function NavButton({ active, icon, label, badge, onClick }: { active: boolean; i
   return <button className={active ? "active" : ""} onClick={onClick}><i>{icon}</i><span>{label}</span>{badge ? <em>{badge}</em> : null}</button>;
 }
 
-function Home({ data, current, setModal, setTab }: { data: FamilyState; current: Member; setModal: (v: "photo" | "archive") => void; setTab: (v: Tab) => void }) {
+function Home({ data, current, presence, setModal, setTab }: { data: FamilyState; current: Member; presence: PresenceItem[]; setModal: (v: "photo" | "archive") => void; setTab: (v: Tab) => void }) {
   const recent = data.photos[0];
   const weekendPoints = questPointsForWeek(data.quests, startOfQuestWeek(today));
   const weekEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 6);
@@ -459,6 +483,19 @@ function Home({ data, current, setModal, setTab }: { data: FamilyState; current:
       <div><p className="eyebrow">SATURDAY · FAMILY DAY</p><h1>안녕, {current.name} {current.emoji}</h1><p>오늘도 우리 가족의 재미있는 이야기를 만들어요.</p></div>
       <div className="family-bubbles">{members.map((m) => <span key={m.id} style={{ background: m.color }}>{m.emoji}</span>)}</div>
     </div>
+
+    <article className="card presence-card">
+      <div><p className="eyebrow">FAMILY NOW</p><h2>가족 접속 상태</h2></div>
+      <div className="presence-list">{members.map((familyMember) => {
+        const seen = presence.find((item) => item.memberName === familyMember.name)?.lastSeen;
+        const online = Boolean(seen && Date.now() - new Date(seen).getTime() < 120_000);
+        return <div key={familyMember.id} className={online ? "online" : "offline"}>
+          <span style={{ background: familyMember.color }}>{familyMember.emoji}<i /></span>
+          <b>{familyMember.name}</b>
+          <small>{online ? "접속 중" : seen ? relativeSeen(seen) : "접속 기록 없음"}</small>
+        </div>;
+      })}</div>
+    </article>
 
     <div className="hero-grid">
       <article className="card mission-card">
@@ -499,6 +536,14 @@ function Home({ data, current, setModal, setTab }: { data: FamilyState; current:
       </article>
     </div>
   </section>;
+}
+
+function relativeSeen(value: string) {
+  const minutes = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 60_000));
+  if (minutes < 60) return `${minutes}분 전`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  return new Date(value).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
 }
 
 function FamilyGrove({ points }: { points: number }) {
