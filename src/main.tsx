@@ -20,7 +20,7 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (isApi && token) headers.set("authorization", `Bearer ${token}`);
 
   const response = await nativeFetch(url, { ...init, headers, mode: isApi ? "cors" : init.mode });
-  if (isApi && original === "/api/auth/join" && response.ok) {
+  if (isApi && (original === "/api/auth/join" || original === "/api/auth/reset-pin") && response.ok) {
     const clone = response.clone();
     const body = await clone.json() as { token?: string };
     if (body.token) localStorage.setItem("baefamily_session", body.token);
