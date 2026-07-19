@@ -776,7 +776,18 @@ function Settings({
     </article>
     <article className="card setting-card"><h2>퀘스트 하늘 날씨</h2><label><span><b>맑은 하늘</b><small>열린 퀘스트가 이 개수 이하면 맑아져요.</small></span><input type="number" min="1" max="20" value={data.sunnyThreshold} onChange={(e) => setData({ ...data, sunnyThreshold: Number(e.target.value) })} /></label><label><span><b>비 오는 하늘</b><small>열린 퀘스트가 이 개수 이상이면 비가 와요.</small></span><input type="number" min={data.sunnyThreshold + 1} max="40" value={data.rainThreshold} onChange={(e) => setData({ ...data, rainThreshold: Number(e.target.value) })} /></label></article>
     <article className="card unavailable"><h2>이번 웹 버전에서 제외한 기능</h2><ul><li>Google Photos 자동 연동</li><li>AI 가족 동영상 자동 생성</li><li>브라우저 음성 인식</li><li>Apple 가족 계정 자동 연동</li></ul><p>외부 계정과 안전한 서버 설정이 준비되면 하나씩 추가할 수 있어요.</p></article>
-    <article className="card install-card"><span>📲</span><div><h2>홈 화면에 설치하기</h2><p>iPhone·iPad Safari에서 공유 버튼 → <b>홈 화면에 추가</b>를 누르면 독립 앱처럼 열립니다.</p></div></article>
+    <article className="card install-card">
+      <span>📲</span>
+      <div>
+        <h2>홈 화면에 설치하기</h2>
+        <p>휴대폰·태블릿 기종보다 지금 사용하는 <b>브라우저 메뉴</b>가 중요해요. 설치하면 홈 화면 아이콘을 눌러 앱처럼 열 수 있습니다.</p>
+        <ol className="install-steps">
+          <li><b>iPhone·iPad Safari</b><span>아래쪽 공유 버튼(□↑) → <strong>홈 화면에 추가</strong> → 추가</span></li>
+          <li><b>Galaxy·Android Chrome</b><span>오른쪽 위 점 3개(⋮) → <strong>홈 화면에 추가</strong> 또는 <strong>앱 설치</strong> → 설치</span></li>
+        </ol>
+        <small>메뉴가 보이지 않으면 Safari 또는 Chrome에서 <b>baefamily.github.io</b>를 직접 연 뒤 다시 시도하세요.</small>
+      </div>
+    </article>
   </section>;
 }
 
