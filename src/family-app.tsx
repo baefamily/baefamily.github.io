@@ -37,6 +37,7 @@ type FeedbackItem = { id: string; title: string; detail: string; kind: FeedbackK
 type FamilyState = {
   currentMember: string;
   quests: Quest[];
+  trashQuests: Quest[];
   photos: Photo[];
   calendar: CalendarItem[];
   messages: Message[];
@@ -78,6 +79,7 @@ const initialState: FamilyState = {
     { id: "q4", title: "책 20분 읽기", emoji: "📚", points: 15, creator: "Jangwoo", target: "Ayoung", status: "open", createdAt: new Date().toISOString() },
     { id: "q5", title: "가족에게 칭찬하기", emoji: "💌", points: 5, creator: "Ayoung", status: "open", createdAt: new Date().toISOString() },
   ],
+  trashQuests: [],
   photos: [],
   calendar: [
     { id: "c1", title: "가족 영화의 밤", emoji: "🍿", date: isoDay(today), creator: "Sujin" },
@@ -207,7 +209,7 @@ export function FamilyApp() {
       const response = await fetch("/api/state");
       if (!response.ok) throw new Error();
       const result = await response.json();
-      if (result.state) setData({ ...initialState, ...result.state, feedback: result.state.feedback ?? [] });
+      if (result.state) setData({ ...initialState, ...result.state, feedback: result.state.feedback ?? [], trashQuests: result.state.trashQuests ?? [] });
       setSync("saved");
     } catch {
       setSync("offline");
@@ -582,20 +584,24 @@ function growthCaption(points: number) {
 function Quests({ data, setData, current, points, updateQuest, setModal }: { data: FamilyState; setData: (v: FamilyState | ((o: FamilyState) => FamilyState)) => void; current: Member; points: number; updateQuest: (id: string, patch: Partial<Quest>) => void; setModal: (v: "quest") => void }) {
   const [lane, setLane] = useState<QuestStatus>("open");
   const [detailQuest, setDetailQuest] = useState<Quest | null>(null);
-  const [showInbox, setShowInbox] = useState(false);
+  const [statusMember, setStatusMember] = useState<string | null>(null);
+  const [showTrash, setShowTrash] = useState(false);
   const openCount = data.quests.filter((q) => q.status === "open").length;
   const sky = openCount >= data.rainThreshold ? "rainy" : openCount <= data.sunnyThreshold ? "sunny" : "cloudy";
   const visible = data.quests.filter((q) => q.status === lane);
-  const targeted = data.quests.filter((q) => q.target === current.name && q.status === "open");
-  const assigned = data.quests.filter((q) => q.taker === current.name && (q.status === "doing" || q.status === "review"));
-  const challenged = data.quests.filter((q) => q.creator === current.name && q.status === "talk");
-  const inboxTotal = targeted.length + assigned.length + challenged.length;
+  const selectedName = statusMember ?? current.name;
+  const targeted = data.quests.filter((q) => q.target === selectedName && q.status === "open");
+  const assigned = data.quests.filter((q) => q.taker === selectedName && (q.status === "doing" || q.status === "review"));
+  const completed = data.quests.filter((q) => q.status === "done" && (q.taker === selectedName || (!q.taker && q.target === selectedName)));
+  const proposed = data.quests.filter((q) => q.creator === selectedName);
   const lanes: [QuestStatus, string][] = [["open", "떠 있는 바람"], ["doing", "도전 중"], ["review", "확인 요청"], ["done", "완료"], ["talk", "같이 이야기해요"]];
   const act = (q: Quest) => {
     if (q.status === "open" && (!q.target || q.target === current.name)) updateQuest(q.id, { status: "doing", taker: current.name });
     else if (q.status === "doing" && q.taker === current.name) updateQuest(q.id, { status: "review" });
     else if (q.status === "review" && q.creator === current.name) updateQuest(q.id, { status: "done", completedAt: new Date().toISOString() });
   };
+  const canTrash = (q: Quest) => q.creator === current.name || (q.status === "done" && (q.taker === current.name || (!q.taker && q.target === current.name)));
+  const moveToTrash = (q: Quest) => setData((old) => ({ ...old, quests: old.quests.filter((item) => item.id !== q.id), trashQuests: [q, ...(old.trashQuests ?? [])] }));
   return <section className="page">
     <div className="page-title"><div><p className="eyebrow">WEEKEND QUEST</p><h1>함께 해내는 행복 - 바람을 만들어요.</h1><p>제안하고, 약속하고, 서로 확인하면 나무가 자라요.</p></div><button className="primary coral-bg compact wish-add" onClick={() => setModal("quest")}><span>＋</span> 바람 추가</button></div>
     <div className="quest-layout">
@@ -608,19 +614,21 @@ function Quests({ data, setData, current, points, updateQuest, setModal }: { dat
               <span>{q.emoji}</span><b>{q.title.slice(0, 4)}</b><em>+{q.points}</em>
             </button>)}
           </div>
-          {showInbox && <div className="quest-inbox-popover">
-            <header><div><b>나의 퀘스트 알림</b><small>{inboxTotal ? `${inboxTotal}개의 소식이 있어요` : "새 소식이 없어요"}</small></div><button onClick={() => setShowInbox(false)}>×</button></header>
-            <button onClick={() => { setLane("doing"); setShowInbox(false); }}><span>🙋</span><div><b>내가 맡은 퀘스트</b><small>도전 중이거나 확인을 기다리는 일</small></div><em>{assigned.length}</em></button>
-            <button onClick={() => { setLane("open"); setShowInbox(false); }}><span>🎯</span><div><b>나를 지정한 바람</b><small>가족이 나에게 부탁한 퀘스트</small></div><em>{targeted.length}</em></button>
-            <button onClick={() => { setLane("talk"); setShowInbox(false); }}><span>💬</span><div><b>내 제안에 온 챌린지</b><small>함께 이야기하고 결정할 내용</small></div><em>{challenged.length}</em></button>
+          {statusMember && <div className="quest-inbox-popover">
+            <header><div><b>{selectedName}의 퀘스트 상태</b><small>가족 모두가 함께 볼 수 있어요</small></div><button onClick={() => setStatusMember(null)}>×</button></header>
+            <button onClick={() => { setLane("doing"); setStatusMember(null); }}><span>🙋</span><div><b>맡아서 진행 중</b><small>{assigned.map((q) => q.title).slice(0, 2).join(" · ") || "진행 중인 퀘스트가 없어요"}</small></div><em>{assigned.length}</em></button>
+            <button onClick={() => { setLane("open"); setStatusMember(null); }}><span>🎯</span><div><b>지정받은 바람</b><small>{targeted.map((q) => q.title).slice(0, 2).join(" · ") || "새로 지정받은 바람이 없어요"}</small></div><em>{targeted.length}</em></button>
+            <button onClick={() => { setLane("done"); setStatusMember(null); }}><span>✅</span><div><b>완료한 퀘스트</b><small>{completed.map((q) => q.title).slice(0, 2).join(" · ") || "완료 기록이 없어요"}</small></div><em>{completed.length}</em></button>
+            <button onClick={() => { setLane("open"); setStatusMember(null); }}><span>💡</span><div><b>제안한 퀘스트</b><small>{proposed.map((q) => q.title).slice(0, 2).join(" · ") || "제안한 퀘스트가 없어요"}</small></div><em>{proposed.length}</em></button>
           </div>}
           <div className="member-ground">{members.map((m) => {
             const targetCount = data.quests.filter((q) => q.target === m.name && q.status === "open").length;
             const memberPoints = questPointsForWeek(data.quests, startOfQuestWeek(today), m.name);
             const isCurrent = m.name === current.name;
+            const memberStatusCount = data.quests.filter((q) => (q.target === m.name && q.status === "open") || (q.taker === m.name && (q.status === "doing" || q.status === "review"))).length;
             return <div key={m.id}>
-              <button className={`member-avatar ${isCurrent ? "current" : ""}`} style={{ background: m.color }} onClick={() => isCurrent && setShowInbox((old) => !old)} aria-label={isCurrent ? `내 퀘스트 알림 ${inboxTotal}개` : m.name}>
-                {m.emoji}{isCurrent && inboxTotal > 0 && <em>{inboxTotal}</em>}
+              <button className={`member-avatar ${isCurrent ? "current" : ""}`} style={{ background: m.color }} onClick={() => setStatusMember((old) => old === m.name ? null : m.name)} aria-label={`${m.name}의 퀘스트 상태 ${memberStatusCount}개`}>
+                {m.emoji}{memberStatusCount > 0 && <em>{memberStatusCount}</em>}
               </button>
               <b>{m.name}</b>
               <strong>{memberPoints}점 달성</strong>
@@ -631,8 +639,8 @@ function Quests({ data, setData, current, points, updateQuest, setModal }: { dat
       </div>
       <aside className="recommend card"><p className="eyebrow">RECOMMENDED</p><h3>이런 바람 어때요?</h3>{recommended.map(([title, emoji, points]) => { const suggested = { id: `recommended-${title}`, title, emoji, points, creator: current.name, status: "open" as QuestStatus, createdAt: new Date().toISOString() }; return <div className="recommend-row" key={title}><button className="recommend-detail" onClick={() => setDetailQuest(suggested)}><span>{emoji}</span><div><b>{title}</b><small>+{points}점 · 자세히 보기</small></div></button><button className="recommend-add" aria-label={`${title} 바로 추가`} onClick={() => setData((old) => ({ ...old, quests: [{ ...suggested, id: uid("q"), createdAt: new Date().toISOString() }, ...old.quests] }))}>＋</button></div>; })}</aside>
     </div>
-    <div className="lane-tabs-row"><div className="lane-tabs">{lanes.map(([id, title]) => <button key={id} className={lane === id ? "active" : ""} onClick={() => setLane(id)}>{title}<em>{data.quests.filter((q) => q.status === id).length}</em></button>)}</div><button className="primary coral-bg compact wish-add wish-add-secondary" onClick={() => setModal("quest")}><span>＋</span> 바람 추가</button></div>
-    <div className="quest-list">{visible.length ? visible.map((q) => <article className="quest-item card" key={q.id}><span className="quest-emoji">{q.emoji}</span><div><h3>{q.title}</h3><p className="quest-route"><span>{q.creator}</span><i>→</i><span>{q.target ?? "가족 모두"}</span></p></div><b>+{q.points}</b>{q.status !== "done" && q.status !== "talk" ? <button disabled={q.status === "open" && Boolean(q.target && q.target !== current.name)} onClick={() => act(q)}>{q.status === "open" ? (q.target && q.target !== current.name ? `${q.target} 전용` : "내가 할게요") : q.status === "doing" ? "완료했어요" : q.creator === current.name ? "확인하기" : "확인 기다리는 중"}</button> : null}</article>) : <div className="empty">지금 이곳에는 퀘스트가 없어요.</div>}</div>
+    <div className="lane-tabs-row"><div className="lane-tabs">{lanes.map(([id, title]) => <button key={id} className={lane === id ? "active" : ""} onClick={() => { setLane(id); setShowTrash(false); }}>{title}<em>{data.quests.filter((q) => q.status === id).length}</em></button>)}<button className={showTrash ? "active trash-tab" : "trash-tab"} onClick={() => setShowTrash(true)}>🗑 휴지통<em>{(data.trashQuests ?? []).length}</em></button></div><button className="primary coral-bg compact wish-add wish-add-secondary" onClick={() => setModal("quest")}><span>＋</span> 바람 추가</button></div>
+    {showTrash ? <section className="quest-trash card"><header><div><h2>🗑 퀘스트 휴지통</h2><p>내가 제안했거나 내가 완료한 퀘스트를 모아둔 곳이에요.</p></div><button className="empty-trash" disabled={!(data.trashQuests ?? []).length} onClick={() => { if (window.confirm("휴지통의 퀘스트를 모두 영구 삭제할까요?")) setData((old) => ({ ...old, trashQuests: [] })); }}>휴지통 비우기</button></header><div>{(data.trashQuests ?? []).length ? (data.trashQuests ?? []).map((q) => <article key={q.id}><span>{q.emoji}</span><div><b>{q.title}</b><small>{q.creator} → {q.target ?? "가족 모두"}</small></div><strong>+{q.points}</strong></article>) : <p className="trash-empty">휴지통이 비어 있어요.</p>}</div></section> : <div className="quest-list">{visible.length ? visible.map((q) => <article className="quest-item card clickable" key={q.id} onClick={() => setDetailQuest(q)}><span className="quest-emoji">{q.emoji}</span><div><h3>{q.title}</h3><p className="quest-route"><span>{q.creator}</span><i>→</i><span>{q.target ?? "가족 모두"}</span></p><small className="detail-hint">눌러서 세부내역 보기</small></div><b>+{q.points}</b><div className="quest-row-actions">{q.status !== "done" && q.status !== "talk" ? <button disabled={q.status === "open" && Boolean(q.target && q.target !== current.name)} onClick={(event) => { event.stopPropagation(); act(q); }}>{q.status === "open" ? (q.target && q.target !== current.name ? `${q.target} 전용` : "내가 할게요") : q.status === "doing" ? "완료했어요" : q.creator === current.name ? "확인하기" : "확인 기다리는 중"}</button> : null}{canTrash(q) && <button className="trash-quest" onClick={(event) => { event.stopPropagation(); moveToTrash(q); }}>🗑 이동</button>}</div></article>) : <div className="empty">지금 이곳에는 퀘스트가 없어요.</div>}</div>}
     {detailQuest && <QuestDetailModal
       quest={detailQuest}
       current={current}
@@ -647,7 +655,8 @@ function Quests({ data, setData, current, points, updateQuest, setModal }: { dat
 }
 
 function QuestDetailModal({ quest, current, onClose, onTake }: { quest: Quest; current: Member; onClose: () => void; onTake: () => void }) {
-  const canTake = !quest.target || quest.target === current.name;
+  const canTake = quest.status === "open" && (!quest.target || quest.target === current.name);
+  const statusLabels: Record<QuestStatus, string> = { open: "가족 하늘에 떠 있어요", doing: `${quest.taker ?? "가족"}님이 도전 중이에요`, review: "완료 확인을 기다리고 있어요", done: "완료하고 점수를 받았어요", talk: "가족과 함께 이야기 중이에요" };
   return <Modal title="퀘스트 상세" onClose={onClose}>
     <div className="quest-detail-hero">
       <span>{quest.emoji}</span>
@@ -657,15 +666,16 @@ function QuestDetailModal({ quest, current, onClose, onTake }: { quest: Quest; c
     <dl className="quest-detail-list">
       <div><dt>제안한 사람</dt><dd>{quest.creator}</dd></div>
       <div><dt>부탁받은 사람</dt><dd>{quest.target ?? "가족 누구나"}</dd></div>
-      <div><dt>현재 상태</dt><dd>가족 하늘에 떠 있어요</dd></div>
+      <div><dt>맡은 사람</dt><dd>{quest.taker ?? "아직 없음"}</dd></div>
+      <div><dt>현재 상태</dt><dd>{statusLabels[quest.status]}</dd></div>
     </dl>
-    <div className="quest-agreement">
+    {quest.status === "open" && <div className="quest-agreement">
       <span>✓</span>
       <p><b>퀘스트 약속</b><small>가져가면 내용과 {quest.points}점에 동의하고 도전을 시작해요.</small></p>
-    </div>
+    </div>}
     {canTake
       ? <button className="primary coral-bg full" onClick={onTake}>동의하고 내가 할게요</button>
-      : <div className="target-notice">🔒 이 퀘스트는 <b>{quest.target}</b>에게 부탁한 바람이에요.<br />내용은 모든 가족이 함께 볼 수 있어요.</div>}
+      : quest.status === "open" && quest.target ? <div className="target-notice">🔒 이 퀘스트는 <b>{quest.target}</b>에게 부탁한 바람이에요.<br />내용은 모든 가족이 함께 볼 수 있어요.</div> : <div className="target-notice">현재 상태: <b>{statusLabels[quest.status]}</b><br />퀘스트 세부내역은 가족 모두가 함께 볼 수 있어요.</div>}
   </Modal>;
 }
 
