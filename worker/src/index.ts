@@ -1,6 +1,7 @@
 interface Env {
   DB: D1Database;
   FAMILY_INVITE_CODE: string;
+  PIN_RECOVERY_CODE: string;
   SESSION_SECRET: string;
 }
 
@@ -17,6 +18,7 @@ export default {
       const path = url.pathname;
       let response: Response;
       if (path === "/api/auth/join" && request.method === "POST") response = await join(request, env);
+      else if (path === "/api/auth/reset-pin" && request.method === "POST") response = await resetPin(request, env);
       else if (path === "/api/auth/me" && request.method === "GET") response = await me(request, env);
       else if (path === "/api/auth/logout" && request.method === "POST") response = json({ ok: true });
       else if (path === "/api/state" && request.method === "GET") response = await getState(request, env);
@@ -45,6 +47,21 @@ async function join(request: Request, env: Env) {
   if (existing && !safeEqual(existing.pin_hash, pinHash)) return json({ error: "PIN이 맞지 않습니다." }, 400);
   if (!existing) await env.DB.prepare("INSERT INTO family_members (name, pin_hash, joined_at) VALUES (?, ?, ?)").bind(name, pinHash, new Date().toISOString()).run();
   return json({ memberName: name, token: await issueToken(name, env.SESSION_SECRET) });
+}
+
+async function resetPin(request: Request, env: Env) {
+  const body = await request.json() as { familyCode?: string; recoveryCode?: string; memberName?: string; newPin?: string };
+  const name = body.memberName ?? "";
+  const newPin = body.newPin ?? "";
+  if (!env.PIN_RECOVERY_CODE) return json({ error: "관리자 복구 설정이 아직 준비되지 않았습니다." }, 503);
+  if (!safeEqual((body.familyCode ?? "").trim().toUpperCase(), env.FAMILY_INVITE_CODE.trim().toUpperCase())) return json({ error: "가족 코드가 맞지 않습니다." }, 401);
+  if (!safeEqual((body.recoveryCode ?? "").trim(), env.PIN_RECOVERY_CODE.trim())) return json({ error: "관리자 복구 코드가 맞지 않습니다." }, 401);
+  if (!MEMBERS.includes(name)) return json({ error: "가족 구성원을 다시 선택해주세요." }, 400);
+  if (!/^\d{4}$/.test(newPin)) return json({ error: "새 PIN은 숫자 4자리로 입력해주세요." }, 400);
+  const pinHash = await hash(`${name}:${newPin}:${env.SESSION_SECRET}`);
+  await env.DB.prepare("INSERT INTO family_members (name, pin_hash, joined_at) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET pin_hash = excluded.pin_hash")
+    .bind(name, pinHash, new Date().toISOString()).run();
+  return json({ memberName: name, token: await issueToken(name, env.SESSION_SECRET), message: "PIN을 새로 설정했습니다." });
 }
 
 async function me(request: Request, env: Env) {
