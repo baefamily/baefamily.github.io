@@ -76,6 +76,8 @@ h2 { letter-spacing: -.025em; }
 .welcome > div > p:last-child, .page-title > div > p:last-child { color: var(--muted); margin: 0; }
 .family-bubbles { display: flex; }
 .family-bubbles span { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; font-size: 25px; border: 3px solid var(--cream); margin-left: -9px; }
+.presence-card { margin: -10px 0 18px; padding: 18px 21px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.presence-card h2 { margin: 2px 0 0; font-size: 18px; }.presence-list { display: grid; grid-template-columns: repeat(4, minmax(90px, 1fr)); gap: 9px; }.presence-list > div { min-width: 0; padding: 10px 12px; display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; border-radius: 14px; background: var(--cream); }.presence-list > div > span { position: relative; grid-row: 1 / 3; width: 35px; height: 35px; display: grid; place-items: center; border-radius: 50%; font-size: 19px; }.presence-list i { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border: 2px solid white; border-radius: 50%; background: #aeb6b1; }.presence-list .online i { background: #36bd72; }.presence-list b { overflow: hidden; font-size: 10px; white-space: nowrap; text-overflow: ellipsis; }.presence-list small { color: var(--muted); font-size: 8px; }.presence-list .online small { color: var(--green); font-weight: 800; }
 .card { background: rgba(255,255,255,.94); border: 1px solid rgba(23,44,73,.06); border-radius: 28px; box-shadow: var(--shadow); }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, .7fr); gap: 18px; }
 .mission-card { padding: 25px; }
@@ -356,6 +358,7 @@ h2 { letter-spacing: -.025em; }
   .mobile-header .brand img { width: 38px; height: 38px; }.mobile-header .brand strong { font-size: 12px; }
   .page { padding: 25px 15px 100px; }
   .welcome, .page-title { align-items: flex-start; }.family-bubbles { display: none; }.page-title .primary { flex: 0 0 auto; font-size: 0; }.page-title .primary::first-letter { font-size: 16px; }.page-title .wish-add { padding: 11px 13px; font-size: 11px; }.page-title .wish-add span { font-size: 19px; }
+  .presence-card { display: block; }.presence-card > div:first-child { margin-bottom: 12px; }.presence-list { grid-template-columns: 1fr 1fr; }
   .hero-grid, .moment-grid { grid-template-columns: 1fr; }.tree-mini { display: block; text-align: center; }.tree-mini .eyebrow, .tree-mini .progress, .tree-mini button { grid-column: 1 / -1; }
   .mission-title { padding: 21px 0; }.mission-title > span { width: 62px; height: 62px; font-size: 39px; }.mission-title h2 { font-size: 20px; }
   .split-actions { grid-template-columns: 1fr; }
