@@ -7,6 +7,10 @@ const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN as string | undefined)?.repl
   || "https://baefamily-api.jangwoo-fairway-four.workers.dev";
 const nativeFetch = window.fetch.bind(window);
 
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+}
+
 window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const original = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const isApi = original.startsWith("/api/");
