@@ -675,9 +675,15 @@ function Chat({ data, setData, current }: { data: FamilyState; setData: (v: Fami
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const messages = data.messages.filter((m) => peer ? (m.sender === current.name && m.recipient === peer) || (m.sender === peer && m.recipient === current.name) : !m.recipient);
-  const pickFile = (event: ChangeEvent<HTMLInputElement>) => {
+  const pickFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
-    if (selected) setFile(selected);
+    if (selected) {
+      try {
+        setFile(await prepareUploadFile(selected));
+      } catch (error) {
+        alert(error instanceof Error ? error.message : "파일을 준비하지 못했어요.");
+      }
+    }
     event.target.value = "";
   };
   const send = async (event: FormEvent) => {
@@ -924,12 +930,75 @@ function updateAppBadge(count: number) {
   else badgeNavigator.clearAppBadge?.().catch(() => undefined);
 }
 
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+const IMAGE_COMPRESSION_THRESHOLD = 1024 * 1024;
+const IMAGE_MAX_DIMENSION = 1920;
+
+async function prepareUploadFile(file: File) {
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error("파일이 너무 커요. 20MB 이하의 파일을 선택해주세요.");
+  }
+  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+
+  try {
+    const image = await loadImage(file);
+    const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+    if (file.size <= IMAGE_COMPRESSION_THRESHOLD && longestSide <= IMAGE_MAX_DIMENSION) return file;
+
+    const scale = Math.min(1, IMAGE_MAX_DIMENSION / longestSide);
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(image, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    if (!blob || blob.size >= file.size) return file;
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "family-photo";
+    return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
+  } catch {
+    // HEIC 등 브라우저가 변환하지 못하는 사진은 원본 그대로 업로드합니다.
+    return file;
+  }
+}
+
+function loadImage(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+    image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("사진을 읽지 못했어요.")); };
+    image.src = url;
+  });
+}
+
 function PhotoModal({ current, onClose, onSave }: { current: Member; onClose: () => void; onSave: (p: Photo) => void }) {
   const [preview, setPreview] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
   const [busy, setBusy] = useState(false);
-  const select = (e: ChangeEvent<HTMLInputElement>) => { const picked = e.target.files?.[0]; if (picked) { setFile(picked); setPreview(URL.createObjectURL(picked)); } };
+  const [preparing, setPreparing] = useState(false);
+  const select = async (e: ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0];
+    e.target.value = "";
+    if (!picked) return;
+    setPreparing(true);
+    try {
+      const prepared = await prepareUploadFile(picked);
+      setFile(prepared);
+      setPreview((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return URL.createObjectURL(prepared);
+      });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "사진을 준비하지 못했어요.");
+    } finally {
+      setPreparing(false);
+    }
+  };
   const save = async () => {
     if (!file) return;
     setBusy(true);
@@ -941,7 +1010,7 @@ function PhotoModal({ current, onClose, onSave }: { current: Member; onClose: ()
       onSave({ id: uid("p"), url: result.url, author: current.name, caption, createdAt: new Date().toISOString(), likes: [], dislikes: [], comments: [] }); onClose();
     } catch (error) { alert(error instanceof Error ? error.message : "사진을 올리지 못했어요."); } finally { setBusy(false); }
   };
-  return <Modal title="오늘 가장 웃긴 표정" onClose={onClose}><div className="photo-picker">{preview ? <img src={preview} alt="선택한 사진 미리보기" /> : <span>😝</span>}<div className="pick-actions"><label>📷 사진 찍기<input type="file" accept="image/*" capture="user" onChange={select} /></label><label>▣ 보관함에서 선택<input type="file" accept="image/*" onChange={select} /></label></div></div><label className="field">한마디 남기기<textarea value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="가족에게 보여줄 짧은 말을 적어주세요" /></label><button className="primary coral-bg full" disabled={!file || busy} onClick={save}>{busy ? "사진 올리는 중…" : "미션 사진 등록하기"}</button></Modal>;
+  return <Modal title="오늘 가장 웃긴 표정" onClose={onClose}><div className="photo-picker">{preview ? <img src={preview} alt="선택한 사진 미리보기" /> : <span>😝</span>}<div className="pick-actions"><label>📷 사진 찍기<input type="file" accept="image/*" capture="user" onChange={select} /></label><label>▣ 보관함에서 선택<input type="file" accept="image/*" onChange={select} /></label></div></div>{preparing && <p className="upload-note">사진을 보기 좋게 줄이는 중…</p>}{file && !preparing && <p className="upload-note">업로드할 사진 · {formatFileSize(file.size)}</p>}<label className="field">한마디 남기기<textarea value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="가족에게 보여줄 짧은 말을 적어주세요" /></label><button className="primary coral-bg full" disabled={!file || busy || preparing} onClick={save}>{preparing ? "사진 준비 중…" : busy ? "사진 올리는 중…" : "미션 사진 등록하기"}</button></Modal>;
 }
 
 function PhotoArchive({ data, setData, current, onClose }: { data: FamilyState; setData: (v: FamilyState | ((o: FamilyState) => FamilyState)) => void; current: Member; onClose: () => void }) {
