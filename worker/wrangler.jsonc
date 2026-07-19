@@ -9,5 +9,11 @@
       "database_name": "baefamily-db",
       "database_id": "917aef8b-caa3-470e-8e96-6e92ef79f9d3"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA_BUCKET",
+      "bucket_name": "baefamily-media"
+    }
   ]
 }

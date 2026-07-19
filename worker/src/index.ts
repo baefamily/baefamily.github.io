@@ -1,5 +1,6 @@
 interface Env {
   DB: D1Database;
+  MEDIA_BUCKET: R2Bucket;
   FAMILY_INVITE_CODE: string;
   PIN_RECOVERY_CODE: string;
   SESSION_SECRET: string;
@@ -26,7 +27,7 @@ export default {
       else if (path === "/api/state" && request.method === "PUT") response = await putState(request, env);
       else if (path === "/api/presence" && (request.method === "GET" || request.method === "POST")) response = await presence(request, env);
       else if (path === "/api/media" && request.method === "POST") response = await uploadMedia(request, env);
-      else if (path.startsWith("/api/media/") && request.method === "GET") response = await getMedia(path.slice(11), env);
+      else if (path.startsWith("/api/media/") && request.method === "GET") return await getMedia(path.slice(11), env);
       else if (path === "/api/push" && request.method === "GET") response = json({ publicKey: "", chatUnread: 0, questUnread: 0 });
       else if (path === "/api/push") response = json({ ok: true, chatUnread: 0, questUnread: 0 });
       else response = json({ error: "Not found" }, 404);
@@ -111,17 +112,42 @@ async function uploadMedia(request: Request, env: Env) {
   const form = await request.formData();
   const file = form.get("file");
   if (!(file instanceof File)) return json({ error: "사진이나 파일을 선택해주세요." }, 400);
-  if (file.size > 1_500_000) return json({ error: "무료 저장공간에서는 1.5MB 이하 파일만 올릴 수 있어요." }, 413);
+  if (file.size > 20 * 1024 * 1024) return json({ error: "파일이 너무 커요. 20MB 이하의 파일을 선택해주세요." }, 413);
   const key = crypto.randomUUID();
-  await env.DB.prepare("INSERT INTO family_media (media_key, content_type, media_data, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?)").bind(key, file.type || "application/octet-stream", await file.arrayBuffer(), uploadedBy, new Date().toISOString()).run();
+  const contentType = file.type || "application/octet-stream";
+  const createdAt = new Date().toISOString();
+  await env.MEDIA_BUCKET.put(key, file.stream(), {
+    httpMetadata: { contentType, cacheControl: "no-store" },
+    customMetadata: { uploadedBy, originalName: file.name, createdAt },
+  });
+  try {
+    await env.DB.prepare("INSERT INTO family_media (media_key, content_type, media_data, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?)")
+      .bind(key, contentType, new Uint8Array(0), uploadedBy, createdAt).run();
+  } catch (error) {
+    await env.MEDIA_BUCKET.delete(key);
+    throw error;
+  }
   const origin = new URL(request.url).origin;
-  return json({ url: `${origin}/api/media/${key}`, name: file.name, type: file.type, size: file.size });
+  return json({ url: `${origin}/api/media/${key}`, name: file.name, type: contentType, size: file.size });
 }
 
 async function getMedia(key: string, env: Env) {
+  const normalizedKey = decodeURIComponent(key).trim().replace(/^\/+/, "");
+  const object = await env.MEDIA_BUCKET.get(normalizedKey);
+  if (object) {
+    const data = await object.arrayBuffer();
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set("content-type", object.httpMetadata?.contentType || "application/octet-stream");
+    headers.set("content-length", String(data.byteLength));
+    headers.set("etag", object.httpEtag);
+    headers.set("cache-control", "no-store");
+    headers.set("x-media-source", "r2");
+    return new Response(data, { headers });
+  }
   const row = await env.DB.prepare("SELECT content_type, media_data FROM family_media WHERE media_key = ?").bind(key).first<{ content_type: string; media_data: ArrayBuffer }>();
   if (!row) return new Response("Not found", { status: 404 });
-  return new Response(row.media_data, { headers: { "content-type": row.content_type, "cache-control": "public, max-age=31536000, immutable" } });
+  return new Response(row.media_data, { headers: { "content-type": row.content_type, "cache-control": "no-store", "x-media-source": "d1" } });
 }
 
 async function member(request: Request, env: Env) {
