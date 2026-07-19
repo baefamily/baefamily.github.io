@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-type Tab = "home" | "chat" | "quests" | "stats" | "calendar" | "settings";
+type Tab = "home" | "chat" | "quests" | "stats" | "calendar" | "settings" | "feedback";
 type QuestStatus = "open" | "doing" | "review" | "done" | "talk";
 
 type Member = { id: string; name: string; emoji: string; role: string; color: string };
@@ -31,12 +31,16 @@ type Photo = {
 type CalendarItem = { id: string; title: string; emoji: string; date: string; creator: string };
 type MessageAttachment = { url: string; name: string; type: string; size: number };
 type Message = { id: string; sender: string; recipient?: string; text: string; attachment?: MessageAttachment; sentAt: string };
+type FeedbackKind = "idea" | "problem" | "love";
+type FeedbackComment = { id: string; author: string; text: string; createdAt: string };
+type FeedbackItem = { id: string; title: string; detail: string; kind: FeedbackKind; author: string; status: "open" | "completed"; createdAt: string; completedAt?: string; comments: FeedbackComment[] };
 type FamilyState = {
   currentMember: string;
   quests: Quest[];
   photos: Photo[];
   calendar: CalendarItem[];
   messages: Message[];
+  feedback: FeedbackItem[];
   sunnyThreshold: number;
   rainThreshold: number;
 };
@@ -84,6 +88,7 @@ const initialState: FamilyState = {
     { id: "m2", sender: "Ayoung", text: "좋아!! 🙋🏻‍♀️", sentAt: new Date().toISOString() },
     { id: "m3", sender: "Jangwoo", text: "아빠가 퇴근하면서 사 갈게 ❤️", sentAt: new Date().toISOString() },
   ],
+  feedback: [],
 };
 
 const recommended = [
@@ -202,7 +207,7 @@ export function FamilyApp() {
       const response = await fetch("/api/state");
       if (!response.ok) throw new Error();
       const result = await response.json();
-      if (result.state) setData(result.state);
+      if (result.state) setData({ ...initialState, ...result.state, feedback: result.state.feedback ?? [] });
       setSync("saved");
     } catch {
       setSync("offline");
@@ -366,6 +371,7 @@ export function FamilyApp() {
           <NavButton active={tab === "calendar"} icon="□" label="캘린더" onClick={() => setTab("calendar")} />
           <NavButton active={tab === "settings"} icon="⚙" label="설정" onClick={() => setTab("settings")} />
         </nav>
+        <button className="feedback-shortcut" onClick={() => setTab("feedback")}><span>💡</span><b>우리 가족의 의견함</b><small>좋은 점이나 바라는 기능을 들려주세요</small><i>의견 남기기 →</i></button>
         <div className="family-switcher">
           <small>로그인한 가족</small>
           <div className="member-row">
@@ -391,6 +397,7 @@ export function FamilyApp() {
         {tab === "stats" && <Stats data={data} current={current} />}
         {tab === "calendar" && <Calendar data={data} onAddEvent={(date) => { setEventDate(date); setModal("event"); }} />}
         {tab === "settings" && <Settings data={data} setData={setData} notifications={notifications} busy={notificationBusy} message={notificationMessage} enableNotifications={enableNotifications} disableNotifications={disableNotifications} />}
+        {tab === "feedback" && <FeedbackPage data={data} setData={setData} current={current} />}
       </main>
 
       <nav className="bottom-nav" aria-label="모바일 메뉴">
@@ -400,6 +407,7 @@ export function FamilyApp() {
         <NavButton active={tab === "stats"} icon="▥" label="통계" onClick={() => setTab("stats")} />
         <NavButton active={tab === "calendar"} icon="□" label="캘린더" onClick={() => setTab("calendar")} />
         <NavButton active={tab === "settings"} icon="⚙" label="설정" onClick={() => setTab("settings")} />
+        <NavButton active={tab === "feedback"} icon="💡" label="의견" onClick={() => setTab("feedback")} />
       </nav>
 
       {modal === "photo" && <PhotoModal current={current} onClose={() => setModal(null)} onSave={(photo) => setData((old) => ({ ...old, photos: [photo, ...old.photos] }))} />}
@@ -804,6 +812,26 @@ function Calendar({ data, onAddEvent }: { data: FamilyState; onAddEvent: (date: 
     </article>
     <p className="calendar-note">현재 버전에서는 등록한 사람이 일정을 추가할 수 있어요. 드래그 이동과 수정은 다음 버전에 추가합니다.</p>
   </section>;
+}
+
+const feedbackLabels: Record<FeedbackKind, { icon: string; label: string }> = {
+  idea: { icon: "💡", label: "새 기능 제안" }, problem: { icon: "🛠️", label: "불편한 점" }, love: { icon: "💛", label: "마음에 드는 점" },
+};
+
+function FeedbackPage({ data, setData, current }: { data: FamilyState; setData: React.Dispatch<React.SetStateAction<FamilyState>>; current: Member }) {
+  const [view, setView] = useState<"open" | "completed">("open");
+  const [kind, setKind] = useState<FeedbackKind>("idea");
+  const [title, setTitle] = useState(""); const [detail, setDetail] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const feedback = data.feedback ?? [];
+  const submit = (e: FormEvent) => { e.preventDefault(); if (!title.trim() || !detail.trim()) return; const item: FeedbackItem = { id: uid("f"), title: title.trim(), detail: detail.trim(), kind, author: current.name, status: "open", createdAt: new Date().toISOString(), comments: [] }; setData((old) => ({ ...old, feedback: [item, ...(old.feedback ?? [])] })); setTitle(""); setDetail(""); setView("open"); };
+  const toggle = (id: string, status: "open" | "completed") => setData((old) => ({ ...old, feedback: (old.feedback ?? []).map((item) => item.id === id ? { ...item, status, completedAt: status === "completed" ? new Date().toISOString() : undefined } : item) }));
+  const comment = (id: string) => { const text = drafts[id]?.trim(); if (!text) return; setData((old) => ({ ...old, feedback: (old.feedback ?? []).map((item) => item.id === id ? { ...item, comments: [...item.comments, { id: uid("fc"), author: current.name, text, createdAt: new Date().toISOString() }] } : item) })); setDrafts((old) => ({ ...old, [id]: "" })); };
+  const visible = feedback.filter((item) => item.status === view);
+  return <section className="page feedback-page"><div className="page-title"><div><p className="eyebrow">FAMILY FEEDBACK</p><h1>우리 가족의 의견함</h1><p>좋았던 점과 불편했던 점을 함께 이야기하며 더 좋은 공간을 만들어요.</p></div></div><div className="feedback-layout">
+    <form className="card feedback-compose" onSubmit={submit}><p className="eyebrow">NEW FEEDBACK</p><h2>어떤 생각이 들었나요?</h2><div className="feedback-kind-picker">{(Object.keys(feedbackLabels) as FeedbackKind[]).map((value) => <button type="button" className={kind === value ? "selected" : ""} key={value} onClick={() => setKind(value)}><span>{feedbackLabels[value].icon}</span>{feedbackLabels[value].label}</button>)}</div><label className="field">한 줄 제목<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 캘린더 일정을 수정하고 싶어요" /></label><label className="field">자세한 이야기<textarea value={detail} onChange={(e) => setDetail(e.target.value)} placeholder="언제 불편했는지, 어떻게 바뀌면 좋을지 적어주세요" /></label><div className="feedback-examples"><b>이렇게 적어보세요</b><span>“채팅 사진을 크게 볼 수 있으면 좋겠어요.”</span><span>“퀘스트 완료 버튼이 잘 보여서 좋아요.”</span><span>“캘린더 일정을 잘못 적었을 때 수정하고 싶어요.”</span></div><button className="primary coral-bg full" disabled={!title.trim() || !detail.trim()}>가족 의견으로 올리기</button></form>
+    <div className="feedback-board"><div className="feedback-tabs"><button className={view === "open" ? "active" : ""} onClick={() => setView("open")}>진행 중 <em>{feedback.filter((i) => i.status === "open").length}</em></button><button className={view === "completed" ? "active" : ""} onClick={() => setView("completed")}>완료함 <em>{feedback.filter((i) => i.status === "completed").length}</em></button></div><div className="feedback-list">{visible.length ? visible.map((item) => <article className="card feedback-item" key={item.id}><header><span className={`feedback-kind ${item.kind}`}>{feedbackLabels[item.kind].icon} {feedbackLabels[item.kind].label}</span><small>{item.author} · {new Date(item.createdAt).toLocaleDateString("ko-KR")}</small></header><h3>{item.title}</h3><p>{item.detail}</p><button className="feedback-status" onClick={() => toggle(item.id, item.status === "open" ? "completed" : "open")}>{item.status === "open" ? "✓ 해결됐어요 · 완료함으로 이동" : "↻ 다시 이야기하기"}</button><div className="feedback-comments"><b>대화 {item.comments.length}</b>{item.comments.map((c) => <div key={c.id}><span>{members.find((m) => m.name === c.author)?.emoji ?? "🙂"}</span><p><b>{c.author}</b>{c.text}<small>{new Date(c.createdAt).toLocaleString("ko-KR")}</small></p></div>)}<form onSubmit={(e) => { e.preventDefault(); comment(item.id); }}><input value={drafts[item.id] ?? ""} onChange={(e) => setDrafts((old) => ({ ...old, [item.id]: e.target.value }))} placeholder="댓글로 의견을 이어가세요" /><button disabled={!drafts[item.id]?.trim()}>등록</button></form></div></article>) : <div className="card feedback-empty"><span>{view === "open" ? "🌱" : "✅"}</span><h3>{view === "open" ? "아직 올라온 의견이 없어요" : "아직 완료된 의견이 없어요"}</h3><p>{view === "open" ? "첫 번째 가족 의견을 남겨보세요." : "해결된 의견은 이곳에 모여요."}</p></div>}</div></div>
+  </div></section>;
 }
 
 function Settings({
