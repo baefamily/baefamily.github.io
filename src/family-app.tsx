@@ -42,6 +42,7 @@ type FamilyState = {
 };
 type NotificationState = {
   supported: boolean;
+  serverReady: boolean;
   subscribed: boolean;
   permission: NotificationPermission | "unsupported";
   chatUnread: number;
@@ -137,6 +138,7 @@ export function FamilyApp() {
   const [modal, setModal] = useState<"photo" | "archive" | "quest" | "event" | null>(null);
   const [notifications, setNotifications] = useState<NotificationState>({
     supported: false,
+    serverReady: false,
     subscribed: false,
     permission: "default",
     chatUnread: 0,
@@ -158,11 +160,13 @@ export function FamilyApp() {
     const response = await fetch("/api/push");
     if (!response.ok) return;
     const result = await response.json() as {
+      publicKey?: string;
       chatUnread: number;
       questUnread: number;
     };
     const next = {
       supported: true,
+      serverReady: Boolean(result.publicKey),
       subscribed: Boolean(localSubscription),
       permission: Notification.permission,
       chatUnread: result.chatUnread,
@@ -277,6 +281,7 @@ export function FamilyApp() {
       const statusResponse = await fetch("/api/push");
       if (!statusResponse.ok) throw new Error("알림 설정을 불러오지 못했어요.");
       const status = await statusResponse.json() as { publicKey: string };
+      if (!status.publicKey) throw new Error("알림 기능은 현재 준비 중이에요.");
       let subscription = await registration.pushManager.getSubscription();
       if (!subscription) {
         subscription = await registration.pushManager.subscribe({
@@ -293,7 +298,10 @@ export function FamilyApp() {
       setNotificationMessage("알림이 켜졌어요. 새 채팅과 퀘스트를 알려드릴게요.");
       await refreshNotificationStatus();
     } catch (error) {
-      setNotificationMessage(error instanceof Error ? error.message : "알림을 켜지 못했어요.");
+      const errorMessage = error instanceof Error ? error.message : "";
+      setNotificationMessage(errorMessage.includes("applicationServerKey") || errorMessage.includes("P-256")
+        ? "알림 기능은 현재 준비 중이에요."
+        : errorMessage || "알림을 켜지 못했어요.");
     } finally {
       setNotificationBusy(false);
     }
@@ -770,12 +778,13 @@ function Settings({
       <div>
         <p className="eyebrow">NOTIFICATIONS</p>
         <h2>채팅·퀘스트 알림</h2>
-        <p>{notifications.subscribed ? "이 기기에서 새 가족 소식을 바로 알려드려요." : "새 채팅과 나에게 온 퀘스트를 잠금 화면과 앱 아이콘으로 알려드려요."}</p>
+        <p>{notifications.subscribed ? "이 기기에서 새 가족 소식을 바로 알려드려요." : notifications.serverReady ? "새 채팅과 나에게 온 퀘스트를 잠금 화면과 앱 아이콘으로 알려드려요." : "가족 소식을 잠금 화면으로 알려주는 기능을 준비하고 있어요."}</p>
         {!notifications.supported && <small>iPhone·iPad에서는 Safari의 ‘홈 화면에 추가’로 설치한 다음 이 버튼을 눌러주세요.</small>}
+        {notifications.supported && !notifications.serverReady && <small>알림 기능은 준비가 끝나면 사용할 수 있어요.</small>}
         {message && <small className="notification-message">{message}</small>}
       </div>
-      <button className={notifications.subscribed ? "secondary" : "primary"} disabled={busy} onClick={notifications.subscribed ? disableNotifications : enableNotifications}>
-        {busy ? "설정 중…" : notifications.subscribed ? "이 기기 알림 끄기" : "알림 켜기"}
+      <button className={notifications.subscribed ? "secondary" : "primary"} disabled={busy || !notifications.serverReady} onClick={notifications.subscribed ? disableNotifications : enableNotifications}>
+        {busy ? "설정 중…" : notifications.subscribed ? "이 기기 알림 끄기" : notifications.serverReady ? "알림 켜기" : "준비 중"}
       </button>
     </article>
     <article className="card setting-card"><h2>퀘스트 하늘 날씨</h2><label><span><b>맑은 하늘</b><small>열린 퀘스트가 이 개수 이하면 맑아져요.</small></span><input type="number" min="1" max="20" value={data.sunnyThreshold} onChange={(e) => setData({ ...data, sunnyThreshold: Number(e.target.value) })} /></label><label><span><b>비 오는 하늘</b><small>열린 퀘스트가 이 개수 이상이면 비가 와요.</small></span><input type="number" min={data.sunnyThreshold + 1} max="40" value={data.rainThreshold} onChange={(e) => setData({ ...data, rainThreshold: Number(e.target.value) })} /></label></article>
