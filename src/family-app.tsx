@@ -47,6 +47,10 @@ type NotificationState = {
   chatUnread: number;
   questUnread: number;
 };
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
 
 const members: Member[] = [
   { id: "jangwoo", name: "Jangwoo", emoji: "👨🏻", role: "아빠", color: "#dcecff" },
@@ -783,12 +787,43 @@ function Settings({
         <p>휴대폰·태블릿 기종보다 지금 사용하는 <b>브라우저 메뉴</b>가 중요해요. 설치하면 홈 화면 아이콘을 눌러 앱처럼 열 수 있습니다.</p>
         <ol className="install-steps">
           <li><b>iPhone·iPad Safari</b><span>아래쪽 공유 버튼(□↑) → <strong>홈 화면에 추가</strong> → 추가</span></li>
-          <li><b>Galaxy·Android Chrome</b><span>오른쪽 위 점 3개(⋮) → <strong>홈 화면에 추가</strong> 또는 <strong>앱 설치</strong> → 설치</span></li>
+          <li><b>Galaxy·Android Chrome</b><span>아래의 설치 버튼을 누르세요. 버튼이 없으면 오른쪽 위 점 3개(⋮) → <strong>홈 화면에 추가</strong> 또는 <strong>앱 설치</strong>를 확인하세요.</span></li>
         </ol>
+        <InstallAppButton />
         <small>메뉴가 보이지 않으면 Safari 또는 Chrome에서 <b>baefamily.github.io</b>를 직접 연 뒤 다시 시도하세요.</small>
       </div>
     </article>
   </section>;
+}
+
+function InstallAppButton() {
+  const [prompt, setPrompt] = useState<InstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(false);
+
+  useEffect(() => {
+    const standalone = window.matchMedia("(display-mode: standalone)").matches
+      || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    setInstalled(standalone);
+    const ready = (event: Event) => {
+      event.preventDefault();
+      setPrompt(event as InstallPromptEvent);
+    };
+    const done = () => { setInstalled(true); setPrompt(null); };
+    window.addEventListener("beforeinstallprompt", ready);
+    window.addEventListener("appinstalled", done);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", ready);
+      window.removeEventListener("appinstalled", done);
+    };
+  }, []);
+
+  if (installed) return <p className="install-status">✓ 이 기기의 홈 화면에 설치되어 있어요.</p>;
+  if (!prompt) return null;
+  return <button className="primary install-button" onClick={async () => {
+    await prompt.prompt();
+    const choice = await prompt.userChoice;
+    if (choice.outcome === "accepted") setPrompt(null);
+  }}>📲 이 기기에 Our Family 설치</button>;
 }
 
 function urlBase64ToUint8Array(value: string) {
