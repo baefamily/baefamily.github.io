@@ -3,7 +3,8 @@ import ReactDOM from "react-dom/client";
 import { FamilyApp } from "./family-app";
 import "./globals.css";
 
-const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "";
+const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN as string | undefined)?.replace(/\/$/, "")
+  || "https://baefamily-api.jangwoo-fairway-four.workers.dev";
 const nativeFetch = window.fetch.bind(window);
 
 window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
