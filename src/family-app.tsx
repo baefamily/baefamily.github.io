@@ -324,7 +324,7 @@ export function FamilyApp() {
         body: JSON.stringify({ subscription: subscription.toJSON() }),
       });
       if (!response.ok) throw new Error("알림을 등록하지 못했어요. 잠시 후 다시 시도해주세요.");
-      setNotificationMessage("알림이 켜졌어요. 새 채팅과 퀘스트를 알려드릴게요.");
+      setNotificationMessage("알림이 켜졌어요. 채팅, 퀘스트 배정, 완료와 승인을 알려드릴게요.");
       await refreshNotificationStatus();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "";
@@ -856,8 +856,8 @@ function Settings({
       <div className="notification-icon">🔔</div>
       <div>
         <p className="eyebrow">NOTIFICATIONS</p>
-        <h2>채팅·퀘스트 알림</h2>
-        <p>{notifications.subscribed ? "이 기기에서 새 가족 소식을 바로 알려드려요." : notifications.serverReady ? "새 채팅과 나에게 온 퀘스트를 잠금 화면과 앱 아이콘으로 알려드려요." : "가족 소식을 잠금 화면으로 알려주는 기능을 준비하고 있어요."}</p>
+        <h2>가족 활동 알림</h2>
+        <p>{notifications.subscribed ? "새 채팅, 퀘스트 배정, 완료와 승인 소식을 이 기기로 바로 알려드려요." : notifications.serverReady ? "가족 활동을 잠금 화면으로 알려주고 앱 아이콘에 읽지 않은 숫자를 표시해요." : "가족 소식을 잠금 화면으로 알려주는 기능을 준비하고 있어요."}</p>
         {!notifications.supported && <small>iPhone·iPad에서는 Safari의 ‘홈 화면에 추가’로 설치한 다음 이 버튼을 눌러주세요.</small>}
         {notifications.supported && !notifications.serverReady && <small>알림 기능은 준비가 끝나면 사용할 수 있어요.</small>}
         {message && <small className="notification-message">{message}</small>}
