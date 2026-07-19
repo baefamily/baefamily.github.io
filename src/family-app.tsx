@@ -534,7 +534,7 @@ function Home({ data, current, presence, setModal, setTab }: { data: FamilyState
     <div className="section-heading"><div><p className="eyebrow">FAMILY MOMENTS</p><h2>추억의 사진첩</h2></div><button onClick={() => setModal("archive")}>모두 보기</button></div>
     <div className="moment-grid">
       <article className="card moment-placeholder">
-        {recent ? <><img src={recent.url} alt={recent.caption || "가족 미션 사진"} /><div className="photo-overlay"><b>{recent.caption || "오늘의 웃긴 표정"}</b><small>{recent.author} · 좋아요 {recent.likes.length}</small></div></> : <><span>📸</span><h3>첫 가족 순간을 남겨보세요</h3><p>사진을 찍거나 보관함에서 골라 올릴 수 있어요.</p><button onClick={() => setModal("photo")}>사진 올리기</button></>}
+        {recent ? <><img src={mediaDisplayUrl(recent.url)} alt={recent.caption || "가족 미션 사진"} /><div className="photo-overlay"><b>{recent.caption || "오늘의 웃긴 표정"}</b><small>{recent.author} · 좋아요 {recent.likes.length}</small></div></> : <><span>📸</span><h3>첫 가족 순간을 남겨보세요</h3><p>사진을 찍거나 보관함에서 골라 올릴 수 있어요.</p><button onClick={() => setModal("photo")}>사진 올리기</button></>}
       </article>
       <article className="card week-story">
         <div className="play">▶</div><p className="eyebrow">THIS WEEK</p><h2>이번 주 우리 가족 이야기</h2>
@@ -715,7 +715,7 @@ function Chat({ data, setData, current }: { data: FamilyState; setData: (v: Fami
       <div className="chat-people" role="navigation" aria-label="채팅 상대 선택"><button className={!peer ? "active" : ""} onClick={() => setPeer(undefined)}><span>👨‍👩‍👧‍👦</span><div><b>모두</b><small>우리 가족 모두랑</small></div></button>{members.filter((m) => m.name !== current.name).map((m) => <button className={peer === m.name ? "active" : ""} key={m.id} onClick={() => setPeer(m.name)}><span style={{ background: m.color }}>{m.emoji}</span><div><b>{m.name}</b><small>{m.role}</small></div></button>)}</div>
       <div className="conversation">
         <header><b>{peer ?? "같이 하고 싶은 거 있어?"}</b><small>{peer ? "개인 대화" : "좋은 생각 있어?"}</small></header>
-        <div className="bubbles">{messages.map((m) => <div className={m.sender === current.name ? "mine" : ""} key={m.id}><small>{m.sender}</small>{m.text && <p>{m.text}</p>}{m.attachment && (m.attachment.type.startsWith("image/") ? <a href={m.attachment.url} target="_blank" rel="noreferrer"><img className="chat-image" src={m.attachment.url} alt={m.attachment.name} /></a> : <a className="chat-file" href={m.attachment.url} target="_blank" rel="noreferrer"><span>📎</span><div><b>{m.attachment.name}</b><small>{formatFileSize(m.attachment.size)}</small></div></a>)}</div>)}</div>
+        <div className="bubbles">{messages.map((m) => <div className={m.sender === current.name ? "mine" : ""} key={m.id}><small>{m.sender}</small>{m.text && <p>{m.text}</p>}{m.attachment && (m.attachment.type.startsWith("image/") ? <a href={mediaDisplayUrl(m.attachment.url)} target="_blank" rel="noreferrer"><img className="chat-image" src={mediaDisplayUrl(m.attachment.url)} alt={m.attachment.name} /></a> : <a className="chat-file" href={m.attachment.url} target="_blank" rel="noreferrer"><span>📎</span><div><b>{m.attachment.name}</b><small>{formatFileSize(m.attachment.size)}</small></div></a>)}</div>)}</div>
         {file && <div className="attachment-preview"><span>📎 {file.name} · {formatFileSize(file.size)}</span><button onClick={() => setFile(null)}>×</button></div>}
         <form className="chat-composer" onSubmit={send}>
           <div className="chat-tools">
@@ -1036,7 +1036,7 @@ function PhotoArchive({ data, setData, current, onClose }: { data: FamilyState; 
       }),
     }));
   };
-  return <Modal title="등록된 가족 표정" onClose={onClose} wide><div className="archive-grid">{data.photos.length ? data.photos.map((p) => <article className={`archive-photo ${p.likes.length >= 4 ? "all-liked" : p.dislikes.length >= 3 ? "talk-needed" : ""}`} key={p.id}><img src={p.url} alt={p.caption || "가족 표정"} /><div><b>{p.caption || "오늘의 웃긴 표정"}</b><small>{new Date(p.createdAt).toLocaleDateString("ko-KR")} · {p.author}</small><div className="vote-row"><button onClick={() => vote(p.id, "likes")}>♥ {p.likes.length}</button><button onClick={() => vote(p.id, "dislikes")}>👎 {p.dislikes.length}</button>{p.likes.length >= 4 && <em>✨ 모두가 좋아해요</em>}{p.dislikes.length >= 3 && <em>💬 같이 이야기해요</em>}</div></div></article>) : <div className="empty">아직 등록된 사진이 없어요.</div>}</div></Modal>;
+  return <Modal title="등록된 가족 표정" onClose={onClose} wide><div className="archive-grid">{data.photos.length ? data.photos.map((p) => <article className={`archive-photo ${p.likes.length >= 4 ? "all-liked" : p.dislikes.length >= 3 ? "talk-needed" : ""}`} key={p.id}><img src={mediaDisplayUrl(p.url)} alt={p.caption || "가족 표정"} /><div><b>{p.caption || "오늘의 웃긴 표정"}</b><small>{new Date(p.createdAt).toLocaleDateString("ko-KR")} · {p.author}</small><div className="vote-row"><button onClick={() => vote(p.id, "likes")}>♥ {p.likes.length}</button><button onClick={() => vote(p.id, "dislikes")}>👎 {p.dislikes.length}</button>{p.likes.length >= 4 && <em>✨ 모두가 좋아해요</em>}{p.dislikes.length >= 3 && <em>💬 같이 이야기해요</em>}</div></div></article>) : <div className="empty">아직 등록된 사진이 없어요.</div>}</div></Modal>;
 }
 
 function QuestModal({ current, onClose, onSave }: { current: Member; onClose: () => void; onSave: (q: Quest) => void }) {
@@ -1059,4 +1059,9 @@ function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function mediaDisplayUrl(url: string) {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}mediaVersion=20260719-2`;
 }
