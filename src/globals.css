@@ -62,6 +62,7 @@ button { color: inherit; }
 .auth-card form { padding: 48px 54px; align-self: center; }.auth-card h1 { font-size: 39px; }.auth-guide { margin-bottom: 25px; color: var(--muted); font-size: 13px; line-height: 1.7; }
 .login-member { display: flex; align-items: center; gap: 10px; margin: -5px 0 15px; padding: 10px 12px; border-radius: 15px; background: var(--cream); }.login-member > span { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; font-size: 22px; }.login-member > div { display: grid; }.login-member small { color: var(--muted); }
 .pin-help { display: block; margin: -7px 0 16px; color: var(--muted); font-size: 9px; }.auth-error { margin: 0 0 13px; padding: 10px 12px; border-radius: 12px; color: #a43d35; background: #fff0ee; font-size: 11px; font-weight: 750; }
+.pin-reset-link { width: 100%; margin-top: 11px; padding: 8px; border: 0; color: var(--green); background: transparent; font-weight: 800; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 
 main { min-width: 0; }
 .mobile-header { display: none; }
