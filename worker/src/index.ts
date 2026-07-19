@@ -27,6 +27,7 @@ export default {
       else if (path === "/api/state" && request.method === "PUT") response = await putState(request, env);
       else if (path === "/api/presence" && (request.method === "GET" || request.method === "POST")) response = await presence(request, env);
       else if (path === "/api/media" && request.method === "POST") response = await uploadMedia(request, env);
+      else if (path.startsWith("/api/media/") && request.method === "DELETE") response = await deleteMedia(request, path.slice(11), env);
       else if (path.startsWith("/api/media/") && request.method === "GET") return await getMedia(path.slice(11), env);
       else if (path === "/api/push" && request.method === "GET") response = json({ publicKey: "", chatUnread: 0, questUnread: 0 });
       else if (path === "/api/push") response = json({ ok: true, chatUnread: 0, questUnread: 0 });
@@ -148,6 +149,19 @@ async function getMedia(key: string, env: Env) {
   const row = await env.DB.prepare("SELECT content_type, media_data FROM family_media WHERE media_key = ?").bind(key).first<{ content_type: string; media_data: ArrayBuffer }>();
   if (!row) return new Response("Not found", { status: 404 });
   return new Response(row.media_data, { headers: { "content-type": row.content_type, "cache-control": "no-store", "x-media-source": "d1" } });
+}
+
+async function deleteMedia(request: Request, key: string, env: Env) {
+  const memberName = await member(request, env);
+  if (!memberName) return json({ error: "로그인이 필요합니다." }, 401);
+  const normalizedKey = decodeURIComponent(key).trim().replace(/^\/+/, "");
+  const row = await env.DB.prepare("SELECT uploaded_by FROM family_media WHERE media_key = ?")
+    .bind(normalizedKey).first<{ uploaded_by: string }>();
+  if (!row) return json({ error: "사진을 찾지 못했어요." }, 404);
+  if (row.uploaded_by !== memberName) return json({ error: "사진을 등록한 사람만 삭제할 수 있어요." }, 403);
+  await env.MEDIA_BUCKET.delete(normalizedKey);
+  await env.DB.prepare("DELETE FROM family_media WHERE media_key = ?").bind(normalizedKey).run();
+  return json({ ok: true });
 }
 
 async function member(request: Request, env: Env) {

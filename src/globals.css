@@ -423,3 +423,9 @@ h2 { letter-spacing: -.025em; }
 .family-grove.expanded.trees-3 .grown-tree:nth-child(2) { transform:scale(1.08); z-index:2; }
 .family-grove.expanded.trees-3 .grown-tree:nth-child(3) { transform:scale(.9) translateX(-18px); }
 @media (max-width: 760px) { .lane-tabs-row { align-items:stretch; flex-direction:column; } .wish-add-secondary { width:100%; } .family-grove.expanded .grown-tree { font-size:58px; } }
+
+.photo-manage-row { display:flex; gap:8px; margin-top:10px; }
+.photo-manage-row button, .photo-edit-row button { border:1px solid #d9dee8; border-radius:10px; background:#fff; padding:7px 10px; font-weight:700; }
+.photo-manage-row .danger { color:#b42318; border-color:#f1b8b3; background:#fff7f6; }
+.photo-edit-row { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:5px; }
+.photo-edit-row input { flex:1 1 180px; min-width:0; border:1px solid #cfd6e2; border-radius:10px; padding:8px 10px; }

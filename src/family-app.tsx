@@ -1018,6 +1018,9 @@ function PhotoModal({ current, onClose, onSave }: { current: Member; onClose: ()
 }
 
 function PhotoArchive({ data, setData, current, onClose }: { data: FamilyState; setData: (v: FamilyState | ((o: FamilyState) => FamilyState)) => void; current: Member; onClose: () => void }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCaption, setEditCaption] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const vote = (id: string, kind: "likes" | "dislikes") => {
     setData((old) => ({
       ...old,
@@ -1036,7 +1039,42 @@ function PhotoArchive({ data, setData, current, onClose }: { data: FamilyState; 
       }),
     }));
   };
-  return <Modal title="등록된 가족 표정" onClose={onClose} wide><div className="archive-grid">{data.photos.length ? data.photos.map((p) => <article className={`archive-photo ${p.likes.length >= 4 ? "all-liked" : p.dislikes.length >= 3 ? "talk-needed" : ""}`} key={p.id}><img src={mediaDisplayUrl(p.url)} alt={p.caption || "가족 표정"} /><div><b>{p.caption || "오늘의 웃긴 표정"}</b><small>{new Date(p.createdAt).toLocaleDateString("ko-KR")} · {p.author}</small><div className="vote-row"><button onClick={() => vote(p.id, "likes")}>♥ {p.likes.length}</button><button onClick={() => vote(p.id, "dislikes")}>👎 {p.dislikes.length}</button>{p.likes.length >= 4 && <em>✨ 모두가 좋아해요</em>}{p.dislikes.length >= 3 && <em>💬 같이 이야기해요</em>}</div></div></article>) : <div className="empty">아직 등록된 사진이 없어요.</div>}</div></Modal>;
+  const saveCaption = (id: string) => {
+    setData((old) => ({ ...old, photos: old.photos.map((photo) => photo.id === id ? { ...photo, caption: editCaption.trim() } : photo) }));
+    setEditingId(null);
+  };
+  const removePhoto = async (photo: Photo) => {
+    if (!window.confirm("이 사진을 삭제할까요? 삭제한 사진은 되돌릴 수 없어요.")) return;
+    setDeletingId(photo.id);
+    try {
+      const key = mediaKeyFromUrl(photo.url);
+      if (key) {
+        const response = await fetch(`/api/media/${encodeURIComponent(key)}`, { method: "DELETE" });
+        const result = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(result.error ?? "사진을 삭제하지 못했어요.");
+      }
+      setData((old) => ({ ...old, photos: old.photos.filter((item) => item.id !== photo.id) }));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "사진을 삭제하지 못했어요.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+  return <Modal title="등록된 가족 표정" onClose={onClose} wide><div className="archive-grid">{data.photos.length ? data.photos.map((p) => {
+    const canManage = p.author === current.name;
+    const editing = editingId === p.id;
+    return <article className={`archive-photo ${p.likes.length >= 4 ? "all-liked" : p.dislikes.length >= 3 ? "talk-needed" : ""}`} key={p.id}>
+      <img src={mediaDisplayUrl(p.url)} alt={p.caption || "가족 표정"} />
+      <div>
+        {editing
+          ? <div className="photo-edit-row"><input value={editCaption} onChange={(event) => setEditCaption(event.target.value)} placeholder="사진 설명" autoFocus /><button onClick={() => saveCaption(p.id)}>저장</button><button onClick={() => setEditingId(null)}>취소</button></div>
+          : <b>{p.caption || "오늘의 웃긴 표정"}</b>}
+        <small>{new Date(p.createdAt).toLocaleDateString("ko-KR")} · {p.author}</small>
+        <div className="vote-row"><button onClick={() => vote(p.id, "likes")}>♥ {p.likes.length}</button><button onClick={() => vote(p.id, "dislikes")}>👎 {p.dislikes.length}</button>{p.likes.length >= 4 && <em>✨ 모두가 좋아해요</em>}{p.dislikes.length >= 3 && <em>💬 같이 이야기해요</em>}</div>
+        {canManage && !editing && <div className="photo-manage-row"><button onClick={() => { setEditingId(p.id); setEditCaption(p.caption); }}>✎ 설명 수정</button><button className="danger" disabled={deletingId === p.id} onClick={() => removePhoto(p)}>{deletingId === p.id ? "삭제 중…" : "🗑 사진 삭제"}</button></div>}
+      </div>
+    </article>;
+  }) : <div className="empty">아직 등록된 사진이 없어요.</div>}</div></Modal>;
 }
 
 function QuestModal({ current, onClose, onSave }: { current: Member; onClose: () => void; onSave: (q: Quest) => void }) {
@@ -1064,4 +1102,13 @@ function formatFileSize(size: number) {
 function mediaDisplayUrl(url: string) {
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}mediaVersion=20260719-2`;
+}
+
+function mediaKeyFromUrl(url: string) {
+  try {
+    const match = new URL(url).pathname.match(/\/api\/media\/(.+)$/);
+    return match ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
 }
