@@ -8,6 +8,7 @@ interface Env {
 const SITE_ORIGIN = "https://baefamily.github.io";
 const FAMILY_ID = "our-family";
 const MEMBERS = ["Jangwoo", "Sujin", "Ayoung", "Siwon"];
+let presenceTableReady = false;
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -23,6 +24,7 @@ export default {
       else if (path === "/api/auth/logout" && request.method === "POST") response = json({ ok: true });
       else if (path === "/api/state" && request.method === "GET") response = await getState(request, env);
       else if (path === "/api/state" && request.method === "PUT") response = await putState(request, env);
+      else if (path === "/api/presence" && (request.method === "GET" || request.method === "POST")) response = await presence(request, env);
       else if (path === "/api/media" && request.method === "POST") response = await uploadMedia(request, env);
       else if (path.startsWith("/api/media/") && request.method === "GET") response = await getMedia(path.slice(11), env);
       else if (path === "/api/push" && request.method === "GET") response = json({ publicKey: "", chatUnread: 0, questUnread: 0 });
@@ -83,6 +85,24 @@ async function putState(request: Request, env: Env) {
   const updatedAt = new Date().toISOString();
   await env.DB.prepare("INSERT INTO family_state (family_id, state_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(family_id) DO UPDATE SET state_json = excluded.state_json, updated_at = excluded.updated_at").bind(FAMILY_ID, encoded, updatedAt).run();
   return json({ ok: true, updatedAt });
+}
+
+async function presence(request: Request, env: Env) {
+  const memberName = await member(request, env);
+  if (!memberName) return json({ error: "로그인이 필요합니다." }, 401);
+  await ensurePresenceTable(env);
+  if (request.method === "POST") {
+    await env.DB.prepare("INSERT INTO family_presence (member_name, last_seen) VALUES (?, ?) ON CONFLICT(member_name) DO UPDATE SET last_seen = excluded.last_seen")
+      .bind(memberName, new Date().toISOString()).run();
+  }
+  const rows = await env.DB.prepare("SELECT member_name, last_seen FROM family_presence ORDER BY member_name").all<{ member_name: string; last_seen: string }>();
+  return json({ members: rows.results.map((row) => ({ memberName: row.member_name, lastSeen: row.last_seen })) });
+}
+
+async function ensurePresenceTable(env: Env) {
+  if (presenceTableReady) return;
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS family_presence (member_name TEXT PRIMARY KEY NOT NULL, last_seen TEXT NOT NULL)").run();
+  presenceTableReady = true;
 }
 
 async function uploadMedia(request: Request, env: Env) {
