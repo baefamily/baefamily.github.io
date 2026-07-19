@@ -1,15 +1,21 @@
+import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
+
 interface Env {
   DB: D1Database;
   MEDIA_BUCKET: R2Bucket;
   FAMILY_INVITE_CODE: string;
   PIN_RECOVERY_CODE: string;
   SESSION_SECRET: string;
+  VAPID_PUBLIC_KEY: string;
+  VAPID_PRIVATE_KEY: string;
+  VAPID_SUBJECT: string;
 }
 
 const SITE_ORIGIN = "https://baefamily.github.io";
 const FAMILY_ID = "our-family";
 const MEMBERS = ["Jangwoo", "Sujin", "Ayoung", "Siwon"];
 let presenceTableReady = false;
+let pushTablesReady = false;
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -29,8 +35,9 @@ export default {
       else if (path === "/api/media" && request.method === "POST") response = await uploadMedia(request, env);
       else if (path.startsWith("/api/media/") && request.method === "DELETE") response = await deleteMedia(request, path.slice(11), env);
       else if (path.startsWith("/api/media/") && request.method === "GET") return await getMedia(path.slice(11), env);
-      else if (path === "/api/push" && request.method === "GET") response = json({ publicKey: "", chatUnread: 0, questUnread: 0 });
-      else if (path === "/api/push") response = json({ ok: true, chatUnread: 0, questUnread: 0 });
+      else if (path === "/api/push" && request.method === "GET") response = await getPushStatus(request, env);
+      else if (path === "/api/push" && request.method === "POST") response = await updatePush(request, env);
+      else if (path === "/api/push" && request.method === "DELETE") response = await removePush(request, env);
       else response = json({ error: "Not found" }, 404);
       return cors(response, origin);
     } catch (error) {
@@ -80,13 +87,135 @@ async function getState(request: Request, env: Env) {
 }
 
 async function putState(request: Request, env: Env) {
-  if (!await member(request, env)) return json({ error: "로그인이 필요합니다." }, 401);
+  const actor = await member(request, env);
+  if (!actor) return json({ error: "로그인이 필요합니다." }, 401);
   const body = await request.json();
   const encoded = JSON.stringify(body);
   if (encoded.length > 800_000) return json({ error: "저장할 데이터가 너무 큽니다." }, 413);
   const updatedAt = new Date().toISOString();
+  const previousRow = await env.DB.prepare("SELECT state_json FROM family_state WHERE family_id = ?").bind(FAMILY_ID).first<{ state_json: string }>();
+  const previousState = previousRow ? safeJson(previousRow.state_json) : null;
   await env.DB.prepare("INSERT INTO family_state (family_id, state_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(family_id) DO UPDATE SET state_json = excluded.state_json, updated_at = excluded.updated_at").bind(FAMILY_ID, encoded, updatedAt).run();
+  if (previousState) await notifyStateChanges(previousState, body, actor, env);
   return json({ ok: true, updatedAt });
+}
+
+type StoredState = {
+  messages?: Array<{ id: string; sender: string; recipient?: string; text?: string; attachment?: { name?: string } }>;
+  quests?: Array<{ id: string; title: string; creator: string; target?: string; taker?: string; status: string }>;
+};
+
+type PushEvent = { recipients: string[]; kind: "chat" | "quest"; title: string; body: string; url: string; tag: string };
+
+async function notifyStateChanges(previous: StoredState, next: StoredState, actor: string, env: Env) {
+  const events: PushEvent[] = [];
+  const oldMessages = new Set((previous.messages ?? []).map((item) => item.id));
+  for (const message of (next.messages ?? []).filter((item) => !oldMessages.has(item.id))) {
+    const recipients = message.recipient ? [message.recipient] : MEMBERS.filter((name) => name !== message.sender);
+    const preview = message.text?.trim() || (message.attachment?.name ? `첨부파일: ${message.attachment.name}` : "새 사진이나 파일을 보냈어요.");
+    events.push({ recipients, kind: "chat", title: `${message.sender}님의 새 메시지`, body: preview.slice(0, 120), url: "/?open=chat", tag: `chat-${message.id}` });
+  }
+
+  const oldQuests = new Map((previous.quests ?? []).map((item) => [item.id, item]));
+  for (const quest of next.quests ?? []) {
+    const old = oldQuests.get(quest.id);
+    if (!old) {
+      const recipients = quest.target ? [quest.target] : MEMBERS.filter((name) => name !== quest.creator);
+      events.push({ recipients, kind: "quest", title: quest.target ? "새 퀘스트가 도착했어요" : "새 가족 퀘스트가 생겼어요", body: `${quest.creator}님이 ‘${quest.title}’ 퀘스트를 등록했어요.`, url: "/?open=quests", tag: `quest-new-${quest.id}` });
+      continue;
+    }
+    if (old.status === quest.status) continue;
+    if (quest.status === "doing") {
+      events.push({ recipients: [quest.creator], kind: "quest", title: "퀘스트 도전을 시작했어요", body: `${quest.taker ?? actor}님이 ‘${quest.title}’ 퀘스트를 맡았어요.`, url: "/?open=quests", tag: `quest-doing-${quest.id}` });
+    } else if (quest.status === "review") {
+      events.push({ recipients: [quest.creator], kind: "quest", title: "퀘스트 완료 확인 요청", body: `${quest.taker ?? actor}님이 ‘${quest.title}’ 퀘스트를 완료했어요. 확인해주세요.`, url: "/?open=quests", tag: `quest-review-${quest.id}` });
+    } else if (quest.status === "done") {
+      const recipient = quest.taker ?? quest.target;
+      if (recipient) events.push({ recipients: [recipient], kind: "quest", title: "퀘스트가 승인됐어요 🎉", body: `‘${quest.title}’ 퀘스트가 완료 처리됐어요.`, url: "/?open=quests", tag: `quest-done-${quest.id}` });
+    }
+  }
+
+  for (const event of events) {
+    event.recipients = [...new Set(event.recipients.filter((name) => MEMBERS.includes(name) && name !== actor))];
+    if (event.recipients.length) await deliverPush(event, env);
+  }
+}
+
+async function getPushStatus(request: Request, env: Env) {
+  const memberName = await member(request, env);
+  if (!memberName) return json({ error: "로그인이 필요합니다." }, 401);
+  await ensurePushTables(env);
+  const counts = await notificationCounts(memberName, env);
+  return json({ publicKey: env.VAPID_PUBLIC_KEY || "", ...counts });
+}
+
+async function updatePush(request: Request, env: Env) {
+  const memberName = await member(request, env);
+  if (!memberName) return json({ error: "로그인이 필요합니다." }, 401);
+  await ensurePushTables(env);
+  const body = await request.json() as { read?: "chat" | "quest"; subscription?: PushSubscription };
+  if (body.read) {
+    const column = body.read === "chat" ? "chat_unread" : "quest_unread";
+    await env.DB.prepare(`UPDATE family_notification_status SET ${column} = 0 WHERE member_name = ?`).bind(memberName).run();
+  }
+  if (body.subscription) {
+    const subscription = body.subscription;
+    if (!subscription.endpoint || !subscription.keys?.auth || !subscription.keys?.p256dh) return json({ error: "올바르지 않은 알림 구독입니다." }, 400);
+    await env.DB.prepare("INSERT INTO family_push_subscriptions (endpoint, member_name, subscription_json, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET member_name = excluded.member_name, subscription_json = excluded.subscription_json, updated_at = excluded.updated_at")
+      .bind(subscription.endpoint, memberName, JSON.stringify(subscription), new Date().toISOString()).run();
+  }
+  return json({ ok: true, ...await notificationCounts(memberName, env) });
+}
+
+async function removePush(request: Request, env: Env) {
+  const memberName = await member(request, env);
+  if (!memberName) return json({ error: "로그인이 필요합니다." }, 401);
+  await ensurePushTables(env);
+  const body = await request.json() as { endpoint?: string };
+  if (body.endpoint) await env.DB.prepare("DELETE FROM family_push_subscriptions WHERE endpoint = ? AND member_name = ?").bind(body.endpoint, memberName).run();
+  return json({ ok: true });
+}
+
+async function ensurePushTables(env: Env) {
+  if (pushTablesReady) return;
+  await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS family_push_subscriptions (endpoint TEXT PRIMARY KEY NOT NULL, member_name TEXT NOT NULL, subscription_json TEXT NOT NULL, updated_at TEXT NOT NULL)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS family_push_member_idx ON family_push_subscriptions(member_name)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS family_notification_status (member_name TEXT PRIMARY KEY NOT NULL, chat_unread INTEGER NOT NULL DEFAULT 0, quest_unread INTEGER NOT NULL DEFAULT 0)"),
+  ]);
+  pushTablesReady = true;
+}
+
+async function notificationCounts(memberName: string, env: Env) {
+  const row = await env.DB.prepare("SELECT chat_unread, quest_unread FROM family_notification_status WHERE member_name = ?").bind(memberName).first<{ chat_unread: number; quest_unread: number }>();
+  return { chatUnread: row?.chat_unread ?? 0, questUnread: row?.quest_unread ?? 0 };
+}
+
+async function deliverPush(event: PushEvent, env: Env) {
+  await ensurePushTables(env);
+  for (const recipient of event.recipients) {
+    const column = event.kind === "chat" ? "chat_unread" : "quest_unread";
+    await env.DB.prepare(`INSERT INTO family_notification_status (member_name, ${column}) VALUES (?, 1) ON CONFLICT(member_name) DO UPDATE SET ${column} = ${column} + 1`).bind(recipient).run();
+    const counts = await notificationCounts(recipient, env);
+    const rows = await env.DB.prepare("SELECT endpoint, subscription_json FROM family_push_subscriptions WHERE member_name = ?").bind(recipient).all<{ endpoint: string; subscription_json: string }>();
+    for (const row of rows.results) {
+      try {
+        const subscription = JSON.parse(row.subscription_json) as PushSubscription;
+        const payload = await buildPushPayload({
+          data: { title: event.title, body: event.body, url: event.url, tag: event.tag, badge: counts.chatUnread + counts.questUnread },
+          options: { ttl: 86400, urgency: "high", topic: event.tag.slice(0, 32) },
+        }, subscription, { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY });
+        const response = await fetch(subscription.endpoint, payload);
+        if (response.status === 404 || response.status === 410) await env.DB.prepare("DELETE FROM family_push_subscriptions WHERE endpoint = ?").bind(row.endpoint).run();
+      } catch (error) {
+        console.error("push delivery failed", recipient, row.endpoint, error);
+      }
+    }
+  }
+}
+
+function safeJson(value: string): StoredState | null {
+  try { return JSON.parse(value) as StoredState; } catch { return null; }
 }
 
 async function presence(request: Request, env: Env) {
