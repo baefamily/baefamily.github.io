@@ -935,15 +935,12 @@ const IMAGE_COMPRESSION_THRESHOLD = 1024 * 1024;
 const IMAGE_MAX_DIMENSION = 1920;
 
 async function prepareUploadFile(file: File) {
-  if (file.size > MAX_UPLOAD_BYTES) {
-    throw new Error("파일이 너무 커요. 20MB 이하의 파일을 선택해주세요.");
-  }
-  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+  if (!file.type.startsWith("image/") || file.type === "image/gif") return validateUploadSize(file);
 
   try {
     const image = await loadImage(file);
     const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
-    if (file.size <= IMAGE_COMPRESSION_THRESHOLD && longestSide <= IMAGE_MAX_DIMENSION) return file;
+    if (file.size <= IMAGE_COMPRESSION_THRESHOLD && longestSide <= IMAGE_MAX_DIMENSION) return validateUploadSize(file);
 
     const scale = Math.min(1, IMAGE_MAX_DIMENSION / longestSide);
     const width = Math.max(1, Math.round(image.naturalWidth * scale));
@@ -952,17 +949,24 @@ async function prepareUploadFile(file: File) {
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext("2d");
-    if (!context) return file;
+    if (!context) return validateUploadSize(file);
     context.drawImage(image, 0, 0, width, height);
 
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
-    if (!blob || blob.size >= file.size) return file;
+    if (!blob || blob.size >= file.size) return validateUploadSize(file);
     const baseName = file.name.replace(/\.[^.]+$/, "") || "family-photo";
-    return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
+    return validateUploadSize(new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: file.lastModified }));
   } catch {
     // HEIC 등 브라우저가 변환하지 못하는 사진은 원본 그대로 업로드합니다.
-    return file;
+    return validateUploadSize(file);
   }
+}
+
+function validateUploadSize(file: File) {
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error("파일이 너무 커요. 사진을 줄인 뒤에도 20MB를 넘습니다.");
+  }
+  return file;
 }
 
 function loadImage(file: File) {
