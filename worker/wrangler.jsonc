@@ -2,12 +2,5 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "baefamily-api",
   "main": "src/index.ts",
-  "compatibility_date": "2026-07-19",
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "baefamily-db",
-      "database_id": "REPLACE_IN_CLOUDFLARE"
-    }
-  ]
+  "compatibility_date": "2026-07-19"
 }
