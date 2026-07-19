@@ -2,5 +2,12 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "baefamily-api",
   "main": "src/index.ts",
-  "compatibility_date": "2026-07-19"
+  "compatibility_date": "2026-07-19",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "baefamily-db",
+      "database_id": "917aef8b-caa3-470e-8e96-6e92ef79f9d3"
+    }
+  ]
 }
