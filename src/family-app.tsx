@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-type Tab = "home" | "chat" | "quests" | "stats" | "calendar" | "settings" | "feedback";
+type Tab = "home" | "chat" | "quests" | "stats" | "calendar" | "siwon" | "settings" | "feedback";
 type QuestStatus = "open" | "doing" | "review" | "done" | "talk";
 
 type Member = { id: string; name: string; emoji: string; role: string; color: string };
@@ -371,6 +371,7 @@ export function FamilyApp() {
           <NavButton active={tab === "quests"} icon="☁" label="퀘스트" badge={notifications.questUnread} onClick={() => openTab("quests")} />
           <NavButton active={tab === "stats"} icon="▥" label="통계" onClick={() => setTab("stats")} />
           <NavButton active={tab === "calendar"} icon="□" label="캘린더" onClick={() => setTab("calendar")} />
+          <NavButton active={tab === "siwon"} icon="★" label="시원이의 세상" onClick={() => setTab("siwon")} />
           <NavButton active={tab === "settings"} icon="⚙" label="설정" onClick={() => setTab("settings")} />
         </nav>
         <button className="feedback-shortcut" onClick={() => setTab("feedback")}><span>💡</span><b>우리 가족의 의견함</b><small>좋은 점이나 바라는 기능을 들려주세요</small><i>의견 남기기 →</i></button>
@@ -398,6 +399,7 @@ export function FamilyApp() {
         {tab === "chat" && <Chat data={data} setData={setData} current={current} />}
         {tab === "stats" && <Stats data={data} current={current} />}
         {tab === "calendar" && <Calendar data={data} onAddEvent={(date) => { setEventDate(date); setModal("event"); }} />}
+        {tab === "siwon" && <SiwonWorld />}
         {tab === "settings" && <Settings data={data} setData={setData} notifications={notifications} busy={notificationBusy} message={notificationMessage} enableNotifications={enableNotifications} disableNotifications={disableNotifications} />}
         {tab === "feedback" && <FeedbackPage data={data} setData={setData} current={current} />}
       </main>
@@ -408,6 +410,7 @@ export function FamilyApp() {
         <NavButton active={tab === "quests"} icon="☁" label="퀘스트" badge={notifications.questUnread} onClick={() => openTab("quests")} />
         <NavButton active={tab === "stats"} icon="▥" label="통계" onClick={() => setTab("stats")} />
         <NavButton active={tab === "calendar"} icon="□" label="캘린더" onClick={() => setTab("calendar")} />
+        <NavButton active={tab === "siwon"} icon="★" label="시원이" onClick={() => setTab("siwon")} />
         <NavButton active={tab === "settings"} icon="⚙" label="설정" onClick={() => setTab("settings")} />
         <NavButton active={tab === "feedback"} icon="💡" label="의견" onClick={() => setTab("feedback")} />
       </nav>
@@ -821,6 +824,36 @@ function Calendar({ data, onAddEvent }: { data: FamilyState; onAddEvent: (date: 
       <div className="calendar-grid">{cells.map((date, index) => <div className={!date ? "blank" : isoDay(date) === isoDay(today) ? "today" : ""} key={date?.toISOString() ?? `b${index}`}>{date && <><div className="calendar-day-head"><strong>{date.getDate()}</strong><button className="calendar-add" onClick={() => onAddEvent(isoDay(date))} aria-label={`${date.getDate()}일에 일정 추가`}>＋</button></div>{data.calendar.filter((e) => e.date === isoDay(date)).map((event) => <button className="calendar-event" key={event.id} title={`${event.creator}님이 등록`}><span>{event.emoji}</span>{event.title}<small>{event.creator}</small></button>)}</>}</div>)}</div>
     </article>
     <p className="calendar-note">현재 버전에서는 등록한 사람이 일정을 추가할 수 있어요. 드래그 이동과 수정은 다음 버전에 추가합니다.</p>
+  </section>;
+}
+
+function SiwonWorld() {
+  const ideas = [
+    { icon: "🎮", title: "게임 연구소", description: "좋아하는 게임과 직접 만든 게임을 소개해요." },
+    { icon: "🎨", title: "그림 전시관", description: "그림, 레고, 사진으로 나만의 전시회를 열어요." },
+    { icon: "🚀", title: "오늘의 발견", description: "새로 배운 것과 궁금한 것을 하나씩 기록해요." },
+  ];
+  return <section className="page siwon-world">
+    <article className="siwon-hero">
+      <div className="siwon-copy">
+        <p className="siwon-label">SIWON&apos;S WORLD · BUILD &amp; PLAY</p>
+        <span className="siwon-owner">👦🏻 시원이의 웹 실험실</span>
+        <h1>상상한 것을<br />웹으로 만드는 곳.</h1>
+        <p>여기는 시원이가 마음껏 만들고, 바꾸고, 실패해도 괜찮은 자기만의 공간이에요.</p>
+        <div className="siwon-actions">
+          <a className="siwon-link" href="https://baefamily.github.io/siwon/" target="_blank" rel="noreferrer">첫 웹사이트 열기 <span aria-hidden="true">↗</span></a>
+          <small><b>baefamily.github.io/siwon/</b><br />첫 페이지를 공개하면 이 문이 열려요.</small>
+        </div>
+      </div>
+      <div className="siwon-space" aria-hidden="true">
+        <span className="siwon-planet">🪐</span><span className="siwon-rocket">🚀</span>
+        <span className="siwon-star star-one">✦</span><span className="siwon-star star-two">✦</span><span className="siwon-star star-three">★</span>
+        <div className="siwon-code-card"><i /><i /><i /><strong>&lt;Siwon /&gt;</strong></div>
+      </div>
+    </article>
+    <div className="siwon-section-title"><div><p className="eyebrow">START WITH AN IDEA</p><h2>무엇을 만들어 볼까?</h2></div><span>정답은 없어요. 재미있으면 시작!</span></div>
+    <div className="siwon-ideas">{ideas.map((idea, index) => <article key={idea.title}><span>{idea.icon}</span><small>IDEA 0{index + 1}</small><h3>{idea.title}</h3><p>{idea.description}</p></article>)}</div>
+    <article className="siwon-mission"><span>💡</span><div><p className="eyebrow">FIRST MISSION</p><h2>첫 페이지에 나를 소개해 보세요.</h2><p>이름, 좋아하는 것 세 가지, 그리고 오늘의 기분을 넣으면 첫 웹페이지 완성!</p></div><strong>STEP 01</strong></article>
   </section>;
 }
 
