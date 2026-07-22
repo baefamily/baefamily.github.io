@@ -846,7 +846,8 @@ function SiwonWorld() {
         </div>
       </div>
       <div className="siwon-space" aria-hidden="true">
-        <span className="siwon-planet">🪐</span><span className="siwon-rocket">🚀</span>
+        <span className="siwon-planet">🪐</span>
+        <span className="siwon-rocket rocket-one">🚀</span><span className="siwon-rocket rocket-two">🚀</span><span className="siwon-rocket rocket-three">🚀</span><span className="siwon-rocket rocket-four">🚀</span><span className="siwon-rocket rocket-five">🚀</span>
         <span className="siwon-star star-one">✦</span><span className="siwon-star star-two">✦</span><span className="siwon-star star-three">★</span>
         <div className="siwon-code-card"><i /><i /><i /><strong>&lt;Siwon /&gt;</strong></div>
       </div>
